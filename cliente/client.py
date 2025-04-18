@@ -12,6 +12,10 @@ from packet.socket_rdt_client import SocketRDTClient
 client = SocketRDTClient("localhost", 8081)
 client.connect()
 
+client.send("Hola, soy el cliente")
+client.send("Juli aprende python")
+client.send("Caro vas a hacer el tpp con nosotros? o no?")
+
 #pack = Package()
 
 #pack.set_data("Hola, soy el cliente")

@@ -4,41 +4,44 @@ import struct
 
 @dataclass
 class Package:
-    sequence_number = np.uint16(0)
-    ack_number = np.uint16(0)
-    header_length = np.uint16(0)
-    SYN = np.uint8(0)
-    FIN = np.uint8(0)
-    data_length = np.uint32(0)
-    data = ""
+
+    def __init__(self):
+        self.sequence_number = np.uint16(0)
+        self.ack_number = np.uint16(0)
+        self.SYN = np.uint8(0)
+        self.FIN = np.uint8(0)
+        self.data_length = np.uint32(0)
+        self.data = ""
 
     def set_data(self, data):
+        if len(data) > 2**32:
+            raise ValueError("Data too long")
         self.data = data
         self.data_length = np.uint32(len(data))
 
+    def get_data_length(self):
+        return self.data_length
+    
     def get_data(self):
         return self.data
     
     def packaging(self):
-        header = struct.pack('>HHHBBI',  # formato
+        header = struct.pack('>HHBBI',  # formato
                             self.sequence_number,
                             self.ack_number,
-                            self.header_length,
                             self.SYN,
                             self.FIN,
                             self.data_length)
-        payload = self.data.encode('utf-8')  # <-- esto convierte el str en bytes
+        payload = self.data.encode('utf-8')
         return len(header + payload), header + payload
     
     def decode_to_package(self, data):
-        # package = Package()
         self.sequence_number = int.from_bytes(data[0:2], byteorder='big')
         self.ack_number = int.from_bytes(data[2:4], byteorder='big')
-        self.header_length = int.from_bytes(data[4:6], byteorder='big')
-        self.SYN = int.from_bytes(data[6:7], byteorder='big')
-        self.FIN = int.from_bytes(data[7:8], byteorder='big')
-        self.data_length = int.from_bytes(data[8:12], byteorder='big')
-        self.data = data[12:12 + self.data_length].decode('utf-8')
+        self.SYN = int.from_bytes(data[4:5], byteorder='big')
+        self.FIN = int.from_bytes(data[5:6], byteorder='big')
+        self.data_length = int.from_bytes(data[6:10], byteorder='big')
+        self.data = data[10:10 + self.data_length].decode('utf-8')
 
 
     def set_SYN(self):
@@ -50,6 +53,12 @@ class Package:
     def set_ACK(self, ack_number):
         self.ack_number = ack_number
 
+    def set_FIN(self):
+        self.FIN = np.uint8(1)
+
+    def want_FIN(self):
+        return self.FIN == 1
+
     def set_sequence_number(self, sequence_number):
         self.sequence_number = sequence_number
 
@@ -58,6 +67,7 @@ class Package:
 
     def get_sequence_number(self):
         return self.sequence_number
+    
 
     def get_ack_number(self):
         return self.ack_number
@@ -67,7 +77,6 @@ class Package:
             "----- HEADER CONTENT -----\n"
             f"Sequence Number: {self.sequence_number}\n"
             f"Ack Number:      {self.ack_number}\n"
-            f"Header Length:   {self.header_length}\n"
             f"SYN Flag:        {self.SYN}\n"
             f"FIN Flag:        {self.FIN}\n"
             f"Data Length:     {self.data_length}\n"
