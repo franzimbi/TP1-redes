@@ -12,7 +12,6 @@ class SocketRDTClient:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.my_sequence_number = random.randint(0, 2**16 - 1)
         self.other_sequence_number = 0
-
         
     def connect(self):
         print(f"[Cliente] Conectando a {self.host}:{self.port}...")
@@ -27,7 +26,7 @@ class SocketRDTClient:
         package_recv.decode_to_package(data)
         print(f"[Cliente] Recibido SYN-ACK con {package_recv}")
         if package_recv.want_SYN():
-            self.other_sequence_number = package_recv.get_ack_number()
+            self.other_sequence_number = package_recv.get_sequence_number()
             answer = Package()
             ack_number = self.other_sequence_number + 1
             answer.set_ACK(ack_number)
