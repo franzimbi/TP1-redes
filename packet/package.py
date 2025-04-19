@@ -83,7 +83,7 @@ class Package:
 
     def __str__(self):
         return (
-            "----- HEADER CONTENT -----\n"
+            "\n\n----- HEADER CONTENT -----\n"
             f"Sequence Number: {self.sequence_number}\n"
             f"Ack Number:      {self.ack_number}\n"
             f"SYN Flag:        {self.SYN}\n"

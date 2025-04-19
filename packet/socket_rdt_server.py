@@ -106,15 +106,60 @@ class SocketRDTServer:
                     self._is_connected = True
                     return True
 
+    # def bind(self):
+    #     self.socket.bind((self.host, self.port))
+    #     print("[Servidor] Esperando conexión...")
+
+    #     while True:
+    #         data, address = self.socket.recvfrom(HEADER_SIZE)
+    #         package = Package()
+    #         package.decode_to_package(data)
+    #         print(f"[Servidor] Recibido paquete SYN: {package}")
+
+    #         if package.want_SYN():
+    #             # Preparar y enviar SYN-ACK
+    #             answer = Package()
+    #             answer.set_SYN()
+    #             self.client_ack_number = package.get_sequence_number() + 1
+    #             answer.set_ACK(self.client_ack_number)
+    #             self.server_sequence_number = random.randint(0, 2**16 - 1)
+    #             answer.set_sequence_number(self.server_sequence_number)
+    #             _, data = answer.packaging()
+    #             print(f"[Servidor] Enviando SYN-ACK: {answer}")
+    #             self.socket.sendto(data, address)
+
+    #             # Esperar ACK final con reintentos
+    #             try:
+    #                 ack, address = self.__recv_and_wait_for_ack_final(self.server_sequence_number + 1)
+    #                 self.server_sequence_number += 1
+    #                 self.other_address = address
+    #                 self._is_connected = True
+    #                 print("[Servidor] Conexión establecida")
+    #                 return True
+    #             except Exception as e:
+    #                 print(f"[Servidor] Error en conexión: {e}")
+
+
     def _is_alive(self):
         return self.is_alive
         
-        
+# def __recv_and_wait_for_ack_final(self, expected_ack):
+#     self.socket.settimeout(1.0)
+#     retries = 0
 
+#     while retries < 5:
+#         try:
+#             data, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
+#             ack = Package()
+#             ack.decode_to_package(data)
+#             print(f"[Servidor] ACK final recibido: {ack}")
 
-        
-                
+#             if ack.get_ACK() == expected_ack:
+#                 return ack, address
+#             else:
+#                 print(f"[Servidor] ACK inesperado: {ack.get_ACK()}, esperando {expected_ack}")
+#         except socket.timeout:
+#             print(f"[Servidor] Timeout esperando ACK final, intento {retries + 1}")
+#         retries += 1
 
-
-
-
+#     raise Exception("[Servidor] No se recibió ACK final. Conexión fallida.")
