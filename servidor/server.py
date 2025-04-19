@@ -27,7 +27,8 @@ from packet.socket_rdt_server import SocketRDTServer
 skt = SocketRDTServer("localhost", 8081)
 skt.bind()
 i = 0
-while True:
+while skt._is_alive():
     data = skt.recv()
     print(f"Recibido {i}: {data}")
     i+=1
+

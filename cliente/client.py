@@ -15,6 +15,7 @@ client.connect()
 client.send("Hola, soy el cliente")
 client.send("Juli aprende python")
 client.send("Caro vas a hacer el tpp con nosotros? o no?")
+client.end_connection()
 
 #pack = Package()
 

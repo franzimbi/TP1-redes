@@ -10,6 +10,7 @@ class Package:
         self.ack_number = np.uint16(0)
         self.SYN = np.uint8(0)
         self.FIN = np.uint8(0)
+        self.ACK = np.uint8(0)
         self.data_length = np.uint32(0)
         self.data = ""
 
@@ -26,11 +27,12 @@ class Package:
         return self.data
     
     def packaging(self):
-        header = struct.pack('>HHBBI',  # formato
+        header = struct.pack('>HHBBBI',  # formato
                             self.sequence_number,
                             self.ack_number,
                             self.SYN,
                             self.FIN,
+                            self.ACK,
                             self.data_length)
         payload = self.data.encode('utf-8')
         return len(header + payload), header + payload
@@ -40,8 +42,9 @@ class Package:
         self.ack_number = int.from_bytes(data[2:4], byteorder='big')
         self.SYN = int.from_bytes(data[4:5], byteorder='big')
         self.FIN = int.from_bytes(data[5:6], byteorder='big')
-        self.data_length = int.from_bytes(data[6:10], byteorder='big')
-        self.data = data[10:10 + self.data_length].decode('utf-8')
+        self.ACK = int.from_bytes(data[6:7], byteorder='big')
+        self.data_length = int.from_bytes(data[7:11], byteorder='big')
+        self.data = data[11:11 + self.data_length].decode('utf-8')
 
 
     def set_SYN(self):
@@ -53,17 +56,23 @@ class Package:
     def set_ACK(self, ack_number):
         self.ack_number = ack_number
 
+    def get_ACK(self):
+        return self.ack_number
+
     def set_FIN(self):
         self.FIN = np.uint8(1)
 
     def want_FIN(self):
         return self.FIN == 1
 
+    def set_ACK_FLAG(self):
+        self.ACK = np.uint8(1)
+
+    def want_ACK_FLAG(self):
+        return self.ACK == 1
+
     def set_sequence_number(self, sequence_number):
         self.sequence_number = sequence_number
-
-    def get_ACK(self):
-        return self.ack_number
 
     def get_sequence_number(self):
         return self.sequence_number
@@ -79,6 +88,7 @@ class Package:
             f"Ack Number:      {self.ack_number}\n"
             f"SYN Flag:        {self.SYN}\n"
             f"FIN Flag:        {self.FIN}\n"
+            f"ACK Flag:        {self.ACK}\n"            
             f"Data Length:     {self.data_length}\n"
             f"Data:            {self.data}\n"
             "--------------------------"
