@@ -12,7 +12,7 @@ class SimpleTopo(Topo):
         h2 = self.addHost('h2')
 
         # Link entre ellos, podés simular pérdida/latencia
-        self.addLink(h1, h2, cls=TCLink, loss=10, delay='50ms')
+        self.addLink(h1, h2, cls=TCLink, loss=0, delay='50ms')
 
 def run():
     topo = SimpleTopo()

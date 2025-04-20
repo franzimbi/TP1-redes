@@ -35,7 +35,7 @@ class Package:
                             self.ACK,
                             self.data_length)
         payload = self.data.encode('utf-8')
-        return len(header + payload), header + payload
+        return header + payload
     
     def decode_to_package(self, data):
         self.sequence_number = int.from_bytes(data[0:2], byteorder='big')
@@ -46,7 +46,6 @@ class Package:
         self.data_length = int.from_bytes(data[7:11], byteorder='big')
         self.data = data[11:11 + self.data_length].decode('utf-8')
 
-
     def set_SYN(self):
         self.SYN = np.uint8(1)
 
@@ -55,6 +54,7 @@ class Package:
 
     def set_ACK(self, ack_number):
         self.ack_number = ack_number
+        self.set_ACK_FLAG()
 
     def get_ACK(self):
         return self.ack_number
@@ -83,15 +83,10 @@ class Package:
 
     def __str__(self):
         return (
-            "\n\n----- HEADER CONTENT -----\n"
-            f"Sequence Number: {self.sequence_number}\n"
-            f"Ack Number:      {self.ack_number}\n"
-            f"SYN Flag:        {self.SYN}\n"
-            f"FIN Flag:        {self.FIN}\n"
-            f"ACK Flag:        {self.ACK}\n"            
-            f"Data Length:     {self.data_length}\n"
-            f"Data:            {self.data}\n"
-            "--------------------------"
+            "\n\n----- PACKAGE CONTENT -----\n"
+            f"Sequence_n: {self.sequence_number} | Ack_n: {self.ack_number} | SYN: {self.SYN} | FIN: {self.FIN} | ACK: {self.ACK} |\n"          
+            f"Data Len: {self.data_length} | Data: {self.data}\n"
+            "--------------------------\n\n"
         )
 
 
