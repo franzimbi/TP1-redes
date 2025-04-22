@@ -2,7 +2,7 @@
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from packet.socket_rdt import SocketRDT
+from packet.socket_rdt_sw import SocketRDT
 
 
 # BUFFER_SIZE = 4096
@@ -24,8 +24,8 @@ from packet.socket_rdt import SocketRDT
 #     i += 1
 #     sock.sendto(response.encode(), address)
 
-skt = SocketRDT("localhost", 8081)
-# skt = SocketRDTServer("10.0.0.1", 8081)
+#skt = SocketRDT("localhost", 8081)
+skt = SocketRDT("10.0.0.2", 8081)
 
 skt.bind()
 i = 0

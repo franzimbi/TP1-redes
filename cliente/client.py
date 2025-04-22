@@ -3,14 +3,14 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # from packet.package import Package
-from packet.socket_rdt import SocketRDT
+from packet.socket_rdt_sw import SocketRDT
 
 
 # BUFFER_SIZE = 4096
 # PORT_DESTINO = 8086
 
-client = SocketRDT("localhost", 8081)
-# client = SocketRDTClient("10.0.0.2", 8081)
+#client = SocketRDT("localhost", 8081)
+client = SocketRDT("10.0.0.2", 8081)
 
 client.connect()
 

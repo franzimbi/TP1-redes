@@ -3,19 +3,36 @@ import time
 from packet.package import Package
 import random
 import numpy as np
+import threading
+import time
+
+TIMEOUT = 1.0  # segundos
 
 MAX_PACKAGE_SIZE = 1037
 HEADER_SIZE = 13
 TOTAL_RETRIES = 5
+WINDOW_SIZE = 4
 
 
-class SocketRDT:
+class SocketRDT_SR:
     def __init__(self, host, port):
         self.sequence_number = random.randint(0, 2**16 - 1)
         self.ack_number = 0
         self._is_connected = False
         self.adress = (host, port)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        #emisor
+        self.send_base = 0      # Primer número de secuencia aún no ACKeado (emisor)
+        self.next_seq = 0       # Próximo número de secuencia a usar para enviar (emisor)
+        self.sent_buffer = {}   # seq_num -> (Package, timestamp)
+        self.acked = set()      # Conjunto de seq_num que fueron ACKeados
+
+        #receptor
+        self.recv_base = 0      # Primer número de secuencia esperada (receptor)
+        self.recv_buffer = {}    # clave: número de secuencia, valor: datos
+
+
+    
 
     def bind(self):
         self.socket.bind(self.adress)
@@ -36,6 +53,7 @@ class SocketRDT:
                     self.sequence_number += 1
                     self.adress = add_syn
                     self._is_connected = True
+                    self.recv_base = self.sequence_number
                     return True
 
     def connect(self):
@@ -51,26 +69,54 @@ class SocketRDT:
             final_ack.set_sequence_number(self.sequence_number)
             self.socket.sendto(final_ack.packaging(), self.adress)
             self._is_connected = True
+            #inicializo la ventana
+            self.send_base = self.sequence_number + 1
+            self.next_seq = self.send_base
 
 
     def send(self, data):
         if not self._is_connected:
             raise Exception("Socket no conectado")
-        
+
         total_size = len(data)
         offset = 0
+        chunk_size = 1024
+        buffer = {}
+        
         while offset < total_size:
-            data_chunk = data[offset:offset + 1024]
-            pack = Package()
-            pack.set_data(data_chunk)
-            pack.set_sequence_number(self.sequence_number)
+            if self.next_seq < self.send_base + chunk_size * WINDOW_SIZE: # [0,1024,2048]
+                data_chunk = data[offset:offset + chunk_size]
+                pack = Package()
+                pack.set_data(data_chunk)
+                pack.set_sequence_number(self.next_seq)
 
-            try:
-                self.__send_and_wait(pack, TOTAL_RETRIES, self.adress)
-            except Exception as e:
-                raise e
-            self.sequence_number += len(data_chunk)
-            offset += len(data_chunk)
+                # Guardar en el buffer de enviados
+                self.sent_buffer[self.next_seq] = (pack, time.time())
+
+                # Enviar paquete
+                self.socket.sendto(pack.packaging(), self.adress)
+                print(f"[CLIENTE] Enviado paquete con seq {self.next_seq}")
+
+                # Lanzar timer para retransmisión
+                threading.Thread(target=self._start_timer, args=(self.next_seq,), daemon=True).start()
+
+                # Avanzar a próximo paquete
+                offset += len(data_chunk)
+                self.next_seq += len(data_chunk)
+            else:
+                # Esperar espacio en ventana
+                time.sleep(0.01)
+
+    def _start_timer(self, seq_num):
+        while True:
+            time.sleep(TIMEOUT)
+            if seq_num in self.acked:
+                break  # Ya fue ACKeado
+
+            # Retransmitir
+            pack, _ = self.sent_buffer[seq_num]
+            print(f"[CLIENTE] Timeout, reenviando seq {seq_num}")
+            self.socket.sendto(pack.packaging(), self.adress)
     
     def recv(self):
         if not self._is_connected:
@@ -91,6 +137,10 @@ class SocketRDT:
             answer.set_sequence_number(self.sequence_number)
             data = answer.packaging()
             self.socket.sendto(data, address)
+
+        elif pack.get_sequence_number() < self.ack_number:
+            print("[Servidor] Duplicado detectado, reenviando ACK.")
+            return None
 
         return pack.get_data()
 
@@ -147,24 +197,6 @@ class SocketRDT:
             raise Exception("[ERROR] Timeout al esperar el ACK del FIN")
 
 
-    def __send_and_wait(self, package, total_retries, address):
-        data = package.packaging()
-        self.socket.settimeout(1.0)
-        retries = 0
-        while retries < total_retries:
-            self.socket.sendto(data, address)
-            try:
-                data_rcv, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
-                answer = Package()
-                answer.decode_to_package(data_rcv)
-                if answer.get_ACK() == self.sequence_number + package.get_data_length():
-                    self.socket.settimeout(None)
-                    return answer
-            except socket.timeout:
-                retries += 1
-
-        self.socket.settimeout(None)
-        return None
 
 
     def __send_and_wait_syn(self, package, total_retries, address):
@@ -182,7 +214,7 @@ class SocketRDT:
                     return answer
             except socket.timeout:
                 retries += 1
-                print(f"[Cliente] Timeout esperando ACK, reintentando... {retries}")
+                print(f"[Cliente] Timeout esperando ACK , reintentando... {retries}")
 
         self.socket.settimeout(None)
         return None
