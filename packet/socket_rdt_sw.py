@@ -1,3 +1,4 @@
+import math
 import socket
 import time
 from packet.package import Package
@@ -5,13 +6,15 @@ import random
 import numpy as np
 
 MAX_PACKAGE_SIZE = 1037
+MAX_DATA_SIZE = 1024
 HEADER_SIZE = 13
 TOTAL_RETRIES = 5
+MAX_SEQ_NUM = 2**16 - 1
 
 
 class SocketRDT:
     def __init__(self, host, port):
-        self.sequence_number = random.randint(0, 2**16 - 1)
+        self.sequence_number = random.randint(0, MAX_SEQ_NUM - 1)
         self.ack_number = 0
         self._is_connected = False
         self.adress = (host, port)
@@ -28,12 +31,12 @@ class SocketRDT:
 
                 answer_syn = Package()
                 answer_syn.set_SYN()
-                self.ack_number = pack_syn.get_sequence_number() + 1
+                self.ack_number = (pack_syn.get_sequence_number() + 1) % MAX_SEQ_NUM
                 answer_syn.set_ACK(self.ack_number)
                 answer_syn.set_sequence_number(self.sequence_number)
                 pack_ack_syn = self.__send_and_wait_syn(answer_syn, TOTAL_RETRIES, add_syn)
-                if pack_ack_syn is not None and pack_ack_syn.get_ACK() == self.sequence_number + 1:
-                    self.sequence_number += 1
+                if pack_ack_syn is not None and pack_ack_syn.get_ACK() == (self.sequence_number + 1) % MAX_SEQ_NUM:
+                    self.sequence_number = (self.sequence_number+ 1) % MAX_SEQ_NUM
                     self.adress = add_syn
                     self._is_connected = True
                     return True
@@ -44,23 +47,23 @@ class SocketRDT:
         syn.set_sequence_number(self.sequence_number)
         answer_connect = self.__send_and_wait_syn(syn, TOTAL_RETRIES, self.adress)
         if answer_connect is not None and answer_connect.want_SYN():
-            self.ack_number = answer_connect.get_sequence_number() + 1
+            self.ack_number = (answer_connect.get_sequence_number() + 1) % MAX_SEQ_NUM
             final_ack = Package()
             final_ack.set_ACK(self.ack_number)
-            self.sequence_number += 1
+            self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
             final_ack.set_sequence_number(self.sequence_number)
             self.socket.sendto(final_ack.packaging(), self.adress)
             self._is_connected = True
 
 
-    def send(self, data):
+    def _send(self, data):
         if not self._is_connected:
             raise Exception("Socket no conectado")
         
         total_size = len(data)
         offset = 0
         while offset < total_size:
-            data_chunk = data[offset:offset + 1024]
+            data_chunk = data[offset:offset + MAX_DATA_SIZE]
             pack = Package()
             pack.set_data(data_chunk)
             pack.set_sequence_number(self.sequence_number)
@@ -69,10 +72,22 @@ class SocketRDT:
                 self.__send_and_wait(pack, TOTAL_RETRIES, self.adress)
             except Exception as e:
                 raise e
-            self.sequence_number += len(data_chunk)
+            self.sequence_number = (self.sequence_number + len(data_chunk)) % MAX_SEQ_NUM
             offset += len(data_chunk)
+
+    def send_all(self, data):
+        if not self._is_connected:
+            raise Exception("Socket no conectado")
+        
+        size = math.ceil(len(data) / MAX_DATA_SIZE)
+        self._send(str(size).encode('utf-8'))
+        self._send(data)
+
+    def __is_seq_less(self, a, b):
+       return ((b - a + MAX_SEQ_NUM) % MAX_SEQ_NUM) < (MAX_SEQ_NUM // 2)
+
     
-    def recv(self):
+    def _recv(self):
         if not self._is_connected:
             raise Exception("[SERVER]Socket no conectado")
         
@@ -85,18 +100,36 @@ class SocketRDT:
             return self.__end_connection()
 
         if pack.get_sequence_number() == self.ack_number:
-            self.ack_number += pack.get_data_length()
+            self.ack_number = (self.ack_number + pack.get_data_length()) % MAX_SEQ_NUM
             answer = Package()
             answer.set_ACK(self.ack_number)
             answer.set_sequence_number(self.sequence_number)
             data = answer.packaging()
             self.socket.sendto(data, address)
 
-        elif pack.get_sequence_number() < self.ack_number:
+        elif self.__is_seq_less(pack.get_sequence_number(), self.ack_number):
             print("[Servidor] Duplicado detectado, reenviando ACK.")
             return None
 
         return pack.get_data()
+
+    def recv_all(self):
+        if not self._is_connected:
+            raise Exception("[SERVER]Socket no conectado")
+        
+        size = None
+        while size is None:
+            size = self._recv()
+        size = int(size.decode('utf-8'))
+        buffer = b''
+        received_packages = 0
+        while received_packages < size:
+            data = self._recv()
+            if data is not None:
+                buffer += data
+                received_packages += 1
+        return buffer
+
 
     def close(self):
         fin = Package()
@@ -110,8 +143,8 @@ class SocketRDT:
             final_pack.decode_to_package(data)
             if final_pack.want_FIN():
                 answer = Package()
-                self.ack_number += 1 # no se pq el doble, falta algun +1 en otro lado
-                answer.set_ACK(self.ack_number + 1)
+                self.ack_number = (self.ack_number + 1) % MAX_SEQ_NUM
+                answer.set_ACK((self.ack_number + 1) % MAX_SEQ_NUM)
                 answer.set_sequence_number(self.sequence_number)
                 self.socket.sendto(answer.packaging(), self.adress)
                 self._is_connected = False
@@ -122,17 +155,17 @@ class SocketRDT:
 
     def __end_connection(self):
         ack_fin = Package()
-        self.ack_number += 1
+        self.ack_number = (self.ack_number + 1) % MAX_SEQ_NUM
         ack_fin.set_ACK(self.ack_number)
         ack_fin.set_sequence_number(self.sequence_number)
-        self.sequence_number += 1
+        self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
         data = ack_fin.packaging()
         self.socket.sendto(data, self.adress)
         # mando el fin ahora
         fin = Package()
         fin.set_FIN()
         fin.set_sequence_number(self.sequence_number)
-        self.sequence_number += 1
+        self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
         data = fin.packaging()
         self.socket.sendto(data, self.adress)
         # espero el ack
@@ -161,7 +194,7 @@ class SocketRDT:
                 data_rcv, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
                 answer = Package()
                 answer.decode_to_package(data_rcv)
-                if answer.get_ACK() == self.sequence_number + package.get_data_length():
+                if answer.get_ACK() == (self.sequence_number + package.get_data_length()) % MAX_SEQ_NUM:
                     self.socket.settimeout(None)
                     return answer
             except socket.timeout:
@@ -182,7 +215,7 @@ class SocketRDT:
                 data_rcv, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
                 answer = Package()
                 answer.decode_to_package(data_rcv)
-                if answer.get_ACK() == self.sequence_number + 1:
+                if answer.get_ACK() == (self.sequence_number + 1) % MAX_SEQ_NUM:
                     self.socket.settimeout(None)
                     return answer
             except socket.timeout:

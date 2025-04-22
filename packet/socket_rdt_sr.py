@@ -22,14 +22,17 @@ class SocketRDT_SR:
         self.adress = (host, port)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         #emisor
-        self.send_base = 0      # Primer número de secuencia aún no ACKeado (emisor)
-        self.next_seq = 0       # Próximo número de secuencia a usar para enviar (emisor)
+        self.send_base = self.sequence_number     # Primer número de secuencia aún no ACKeado (emisor)
+        self.next_seq = self.sequence_number      # Próximo número de secuencia a usar para enviar (emisor)
         self.sent_buffer = {}   # seq_num -> (Package, timestamp)
         self.acked = set()      # Conjunto de seq_num que fueron ACKeados
 
         #receptor
         self.recv_base = 0      # Primer número de secuencia esperada (receptor)
         self.recv_buffer = {}    # clave: número de secuencia, valor: datos
+
+        self.timers = {}  # seq_num: start_time
+        self.timer_manager_running = False
 
 
     
@@ -81,68 +84,99 @@ class SocketRDT_SR:
         total_size = len(data)
         offset = 0
         chunk_size = 1024
-        buffer = {}
         
         while offset < total_size:
-            if self.next_seq < self.send_base + chunk_size * WINDOW_SIZE: # [0,1024,2048]
+            if self.next_seq < self.send_base + chunk_size * WINDOW_SIZE:
                 data_chunk = data[offset:offset + chunk_size]
                 pack = Package()
                 pack.set_data(data_chunk)
                 pack.set_sequence_number(self.next_seq)
 
-                # Guardar en el buffer de enviados
+                # guardar en el buffer de enviados
                 self.sent_buffer[self.next_seq] = (pack, time.time())
 
-                # Enviar paquete
+                # enviar paquete
                 self.socket.sendto(pack.packaging(), self.adress)
                 print(f"[CLIENTE] Enviado paquete con seq {self.next_seq}")
 
-                # Lanzar timer para retransmisión
-                threading.Thread(target=self._start_timer, args=(self.next_seq,), daemon=True).start()
 
-                # Avanzar a próximo paquete
-                offset += len(data_chunk)
                 self.next_seq += len(data_chunk)
-            else:
-                # Esperar espacio en ventana
-                time.sleep(0.01)
+                offset += len(data_chunk)
 
-    def _start_timer(self, seq_num):
-        while True:
-            time.sleep(TIMEOUT)
-            if seq_num in self.acked:
-                break  # Ya fue ACKeado
+                # revisar ACKs
+            try:
+                recived_bytes, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
+                pack = Package()
+                pack.decode_to_package(recived_bytes)
+                ack_seq = pack.get_ack_number() - 1
+                if ack_seq in self.sent_buffer:
+                    self.acked.add(ack_seq)
+                    del self.sent_buffer[ack_seq]
+                    # avanzar send_base al menor seq no ACKeado
+                    while self.send_base in self.acked:
+                        self.send_base += 1
+            except TimeoutError:
+                pass
 
-            # Retransmitir
-            pack, _ = self.sent_buffer[seq_num]
-            print(f"[CLIENTE] Timeout, reenviando seq {seq_num}")
-            self.socket.sendto(pack.packaging(), self.adress)
+
+            current_time = time()
+            for seq, send_time in list(self.sent_buffer.items()):
+                if current_time - send_time > self.timeout_interval:
+                    msg = self.sent_buffer[seq]
+                    self.skt.sendto(msg.encode(), (self.dest_adress, self.dest_port))
+                    self.sent_buffer[seq] = current_time
+
+
+
     
     def recv(self):
         if not self._is_connected:
             raise Exception("[SERVER]Socket no conectado")
-        
+    
+        buffer = []
+
+        # recibir paquete
         recived_bytes, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
         pack = Package()
         pack.decode_to_package(recived_bytes)
+        seq_num = pack.get_sequence_number()  
+        data = pack.get_data()  
 
+        # verificar si el paquete es FIN
         if pack.want_FIN():
             self._is_connected = False
             return self.__end_connection()
 
-        if pack.get_sequence_number() == self.ack_number:
-            self.ack_number += pack.get_data_length()
+        # si el paquete esta dentro de la ventana de recepcion
+        if self.receive_base <= seq_num < self.receive_base + WINDOW_SIZE:
+            # almacenar el paquete en el buffer si esta dentro de la ventana
+            self.received_buffer[seq_num] = data
+        
+            # enviar ACK para el siguiente paquete esperado
+            ack_seq = self.receive_base + 1  # el siguiente paquete esperado
             answer = Package()
-            answer.set_ACK(self.ack_number)
+            answer.set_ACK(ack_seq)
             answer.set_sequence_number(self.sequence_number)
-            data = answer.packaging()
-            self.socket.sendto(data, address)
+            self.socket.sendto(answer.packaging(), address)
+            print(f"[RECEPTOR] Enviado ACK para el paquete con seq {ack_seq}")
 
-        elif pack.get_sequence_number() < self.ack_number:
-            print("[Servidor] Duplicado detectado, reenviando ACK.")
-            return None
+            # procesar paquetes en orden (si estan disponibles)
+            if self.receive_base in self.received_buffer:
+                # aca se puede procesar el paquete
+                data = self.received_buffer[self.receive_base]
+                print(f"[RECEPTOR] Paquete con seq {self.receive_base} procesado")
 
-        return pack.get_data()
+                # eliminar del buffer
+                del self.received_buffer[self.receive_base]
+            
+                #avanzar
+                self.receive_base += 1
+
+        # ignorar el paquete si esta afuera de la ventana
+        else:
+            print(f"[RECEPTOR] Paquete con seq {seq_num} fuera de la ventana de recepción")
+
+        return data
 
     def close(self):
         fin = Package()

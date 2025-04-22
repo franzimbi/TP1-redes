@@ -24,13 +24,13 @@ from packet.socket_rdt_sw import SocketRDT
 #     i += 1
 #     sock.sendto(response.encode(), address)
 
-#skt = SocketRDT("localhost", 8081)
+# skt = SocketRDT("localhost", 8081)
 skt = SocketRDT("10.0.0.2", 8081)
 
 skt.bind()
 i = 0
 while True:
-    data = skt.recv()
-    print(f"Recibido {i}: {data}")
+    data = skt.recv_all()
+    print(f"Recibido {i}: {data.decode('utf-8')}")
     i+=1
 

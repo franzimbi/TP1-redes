@@ -2,6 +2,8 @@ from dataclasses import dataclass
 import numpy as np
 import struct
 
+MAX_SEQ_NUM = 2**16
+
 @dataclass
 class Package:
 
@@ -12,7 +14,7 @@ class Package:
         self.FIN = np.uint8(0)
         self.ACK = np.uint8(0)
         self.data_length = np.uint32(0)
-        self.data = ""
+        self.data = b''
 
     def set_data(self, data):
         if len(data) > 2**32:
@@ -28,13 +30,13 @@ class Package:
     
     def packaging(self):
         header = struct.pack('>HHBBBI',  # formato
-                            self.sequence_number,
-                            self.ack_number,
+                            self.sequence_number ,
+                            self.ack_number ,
                             self.SYN,
                             self.FIN,
                             self.ACK,
                             self.data_length)
-        payload = self.data.encode('utf-8')
+        payload = self.data
         return header + payload
     
     def decode_to_package(self, data):
@@ -44,7 +46,7 @@ class Package:
         self.FIN = int.from_bytes(data[5:6], byteorder='big')
         self.ACK = int.from_bytes(data[6:7], byteorder='big')
         self.data_length = int.from_bytes(data[7:11], byteorder='big')
-        self.data = data[11:11 + self.data_length].decode('utf-8')
+        self.data = data[11:11 + self.data_length]
 
     def set_SYN(self):
         self.SYN = np.uint8(1)
