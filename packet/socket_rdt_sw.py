@@ -12,7 +12,8 @@ TOTAL_RETRIES = 5
 MAX_SEQ_NUM = 2**16 - 1
 
 
-class SocketRDT:
+class SocketRDT_SW:
+    
     def __init__(self, host, port):
         self.sequence_number = random.randint(0, MAX_SEQ_NUM - 1)
         self.ack_number = 0
@@ -225,11 +226,3 @@ class SocketRDT:
         self.socket.settimeout(None)
         return None
     
-    def __build_package(self, seq, ack=None, syn=False, fin=False, data=b''):
-        p = Package()
-        if syn: p.set_SYN()
-        elif fin: p.set_FIN()
-        if ack: p.set_ACK(ack)
-        p.set_sequence_number(seq)
-        p.set_data(data)
-        return p

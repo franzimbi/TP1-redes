@@ -12,6 +12,7 @@ MAX_PACKAGE_SIZE = 1037
 HEADER_SIZE = 13
 TOTAL_RETRIES = 5
 WINDOW_SIZE = 4
+MAX_SEQ_NUM = 2**16 - 1
 
 
 class SocketRDT_SR:
@@ -56,7 +57,7 @@ class SocketRDT_SR:
                     self.sequence_number += 1
                     self.adress = add_syn
                     self._is_connected = True
-                    self.recv_base = self.sequence_number
+                    self.recv_base = self.ack_number
                     return True
 
     def connect(self):
@@ -109,19 +110,21 @@ class SocketRDT_SR:
                 pack = Package()
                 pack.decode_to_package(recived_bytes)
                 ack_seq = pack.get_ack_number() - 1
+                print(f"[CLIENTE] Enviado paquete con seq {self.next_seq}")
                 if ack_seq in self.sent_buffer:
                     self.acked.add(ack_seq)
                     del self.sent_buffer[ack_seq]
                     # avanzar send_base al menor seq no ACKeado
                     while self.send_base in self.acked:
                         self.send_base += 1
+                        #me falta eliminar send_base de acked para que no sea infinito
             except TimeoutError:
                 pass
 
 
             current_time = time()
             for seq, send_time in list(self.sent_buffer.items()):
-                if current_time - send_time > self.timeout_interval:
+                if current_time - send_time > TIMEOUT:
                     msg = self.sent_buffer[seq]
                     self.skt.sendto(msg.encode(), (self.dest_adress, self.dest_port))
                     self.sent_buffer[seq] = current_time
@@ -133,7 +136,7 @@ class SocketRDT_SR:
         if not self._is_connected:
             raise Exception("[SERVER]Socket no conectado")
     
-        buffer = []
+        #buffer = []
 
         # recibir paquete
         recived_bytes, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
@@ -148,12 +151,12 @@ class SocketRDT_SR:
             return self.__end_connection()
 
         # si el paquete esta dentro de la ventana de recepcion
-        if self.receive_base <= seq_num < self.receive_base + WINDOW_SIZE:
+        if self.recv_base <= seq_num < self.recv_base + WINDOW_SIZE:
             # almacenar el paquete en el buffer si esta dentro de la ventana
-            self.received_buffer[seq_num] = data
+            self.recv_buffer[seq_num] = data
         
             # enviar ACK para el siguiente paquete esperado
-            ack_seq = self.receive_base + 1  # el siguiente paquete esperado
+            ack_seq = self.recv_base + 1  # el siguiente paquete esperado
             answer = Package()
             answer.set_ACK(ack_seq)
             answer.set_sequence_number(self.sequence_number)
@@ -161,16 +164,17 @@ class SocketRDT_SR:
             print(f"[RECEPTOR] Enviado ACK para el paquete con seq {ack_seq}")
 
             # procesar paquetes en orden (si estan disponibles)
-            if self.receive_base in self.received_buffer:
+            while self.recv_base in self.recv_buffer:
                 # aca se puede procesar el paquete
-                data = self.received_buffer[self.receive_base]
-                print(f"[RECEPTOR] Paquete con seq {self.receive_base} procesado")
+                data = self.recv_buffer[self.recv_base]
+                print(f"[RECEPTOR] Paquete con seq {self.recv_base} procesado")
+                print(f"[RECEPTOR] DATA: {data} ")
 
                 # eliminar del buffer
-                del self.received_buffer[self.receive_base]
+                del self.recv_buffer[self.recv_base]
             
-                #avanzar
-                self.receive_base += 1
+                #avanzar la ventana 
+                self.recv_base += 1
 
         # ignorar el paquete si esta afuera de la ventana
         else:
