@@ -36,7 +36,7 @@ class SocketRDT_SR:
         self.timer_manager_running = False
 
 
-    
+    self.skt
 
     def bind(self):
         self.socket.bind(self.adress)
@@ -109,7 +109,7 @@ class SocketRDT_SR:
                 recived_bytes, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
                 pack = Package()
                 pack.decode_to_package(recived_bytes)
-                ack_seq = pack.get_ack_number() - 1
+                ack_seq = pack.get_ack_number()
                 print(f"[CLIENTE] Enviado paquete con seq {self.next_seq}")
                 if ack_seq in self.sent_buffer:
                     self.acked.add(ack_seq)
@@ -122,17 +122,17 @@ class SocketRDT_SR:
                 pass
 
 
-            current_time = time()
+            current_time = time.time()
             for seq, send_time in list(self.sent_buffer.items()):
                 if current_time - send_time > TIMEOUT:
                     msg = self.sent_buffer[seq]
-                    self.skt.sendto(msg.encode(), (self.dest_adress, self.dest_port))
+                    self.socket.sendto(msg[0].packaging(), (self.adress, self.dest_port))
                     self.sent_buffer[seq] = current_time
 
 
 
     
-    def recv(self):
+    def recv(self): #hacer q no sea bloqueante, q un thread lo llame a recv y guarde en un buffer los paquetes continuamente
         if not self._is_connected:
             raise Exception("[SERVER]Socket no conectado")
     
@@ -175,7 +175,15 @@ class SocketRDT_SR:
             
                 #avanzar la ventana 
                 self.recv_base += 1
-
+        # si me llego un seq_num menor, reenvio el ACK pq quizas el otro no recibio mi ACK anterior
+        elif seq_num < self.recv_base:
+            # Reenviar ACK
+            ack_seq = self.recv_base  # el próximo paquete que esperás
+            answer = Package()
+            answer.set_ACK(ack_seq)
+            answer.set_sequence_number(self.sequence_number)
+            self.socket.sendto(answer.packaging(), address)
+            print(f"[RECEPTOR] Reenviando ACK para seq {ack_seq} (paquete duplicado con seq {seq_num})")
         # ignorar el paquete si esta afuera de la ventana
         else:
             print(f"[RECEPTOR] Paquete con seq {seq_num} fuera de la ventana de recepción")
