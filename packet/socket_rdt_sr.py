@@ -36,7 +36,6 @@ class SocketRDT_SR:
         self.timer_manager_running = False
 
 
-    self.skt
 
     def bind(self):
         self.socket.bind(self.adress)
@@ -57,7 +56,8 @@ class SocketRDT_SR:
                     self.sequence_number += 1
                     self.adress = add_syn
                     self._is_connected = True
-                    self.recv_base = self.ack_number
+                    self.recv_base = pack_ack_syn.get_sequence_number()
+                    print(f"[SERVIDOR] FIRST recv_base {self.recv_base}")
                     return True
 
     def connect(self):
@@ -74,8 +74,9 @@ class SocketRDT_SR:
             self.socket.sendto(final_ack.packaging(), self.adress)
             self._is_connected = True
             #inicializo la ventana
-            self.send_base = self.sequence_number + 1
+            self.send_base = self.sequence_number
             self.next_seq = self.send_base
+            print(f"[CLIENTE] FIRST send_base {self.send_base}")
 
 
     def send(self, data):
@@ -94,7 +95,7 @@ class SocketRDT_SR:
                 pack.set_sequence_number(self.next_seq)
 
                 # guardar en el buffer de enviados
-                self.sent_buffer[self.next_seq] = (pack, time.time())
+                self.sent_buffer[self.next_seq + len(data_chunk)] = (pack, time.time())
 
                 # enviar paquete
                 self.socket.sendto(pack.packaging(), self.adress)
@@ -102,6 +103,7 @@ class SocketRDT_SR:
 
 
                 self.next_seq += len(data_chunk)
+                print(f"[CLIENTE] Next sequence number {self.next_seq}")
                 offset += len(data_chunk)
 
                 # revisar ACKs
@@ -110,21 +112,25 @@ class SocketRDT_SR:
                 pack = Package()
                 pack.decode_to_package(recived_bytes)
                 ack_seq = pack.get_ack_number()
-                print(f"[CLIENTE] Enviado paquete con seq {self.next_seq}")
+                print(f"[CLIENTE] Llego ACK con sequence number {ack_seq}")
                 if ack_seq in self.sent_buffer:
                     self.acked.add(ack_seq)
+                    print(f"[CLIENTE] Paquete con ack number {ack_seq} dentro de la ventana de recepcion")
                     del self.sent_buffer[ack_seq]
                     # avanzar send_base al menor seq no ACKeado
                     while self.send_base in self.acked:
                         self.send_base += 1
                         #me falta eliminar send_base de acked para que no sea infinito
+
             except TimeoutError:
                 pass
 
 
+            for ack in self.acked:
+                print(f"[CLIENTE] ACK RECIBIDOS: {ack}")
             current_time = time.time()
             for seq, send_time in list(self.sent_buffer.items()):
-                if current_time - send_time > TIMEOUT:
+                if (current_time - send_time) > TIMEOUT:
                     msg = self.sent_buffer[seq]
                     self.socket.sendto(msg[0].packaging(), (self.adress, self.dest_port))
                     self.sent_buffer[seq] = current_time
@@ -143,6 +149,7 @@ class SocketRDT_SR:
         pack = Package()
         pack.decode_to_package(recived_bytes)
         seq_num = pack.get_sequence_number()  
+        print(f"[RECEPTOR] Recibi paquete con sequence number {seq_num}")
         data = pack.get_data()  
 
         # verificar si el paquete es FIN
@@ -156,7 +163,7 @@ class SocketRDT_SR:
             self.recv_buffer[seq_num] = data
         
             # enviar ACK para el siguiente paquete esperado
-            ack_seq = self.recv_base + 1  # el siguiente paquete esperado
+            ack_seq = self.recv_base + len(data)  # el siguiente paquete esperado
             answer = Package()
             answer.set_ACK(ack_seq)
             answer.set_sequence_number(self.sequence_number)
@@ -174,7 +181,7 @@ class SocketRDT_SR:
                 del self.recv_buffer[self.recv_base]
             
                 #avanzar la ventana 
-                self.recv_base += 1
+                self.recv_base += + len(data)
         # si me llego un seq_num menor, reenvio el ACK pq quizas el otro no recibio mi ACK anterior
         elif seq_num < self.recv_base:
             # Reenviar ACK
