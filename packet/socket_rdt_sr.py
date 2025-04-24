@@ -1,3 +1,4 @@
+from collections import deque
 import socket
 import time
 from packet.package import Package
@@ -17,7 +18,7 @@ MAX_SEQ_NUM = 2**16 - 1
 
 class SocketRDT_SR:
     def __init__(self, host, port):
-        self.sequence_number = random.randint(0, 2**16 - 1)
+        self.sequence_number = 0#random.randint(0, 2**16 - 1)
         self.ack_number = 0
         self._is_connected = False
         self.adress = (host, port)
@@ -27,7 +28,7 @@ class SocketRDT_SR:
         self.next_seq = self.sequence_number      # Próximo número de secuencia a usar para enviar (emisor)
         self.sent_buffer = {}   # seq_num -> (Package, timestamp)
         self.acked = set()      # Conjunto de seq_num que fueron ACKeados
-
+        self.ack_to_move_window  = deque()
         #receptor
         self.recv_base = 0      # Primer número de secuencia esperada (receptor)
         self.recv_buffer = {}    # clave: número de secuencia, valor: datos
@@ -48,12 +49,12 @@ class SocketRDT_SR:
 
                 answer_syn = Package()
                 answer_syn.set_SYN()
-                self.ack_number = pack_syn.get_sequence_number() + 1
+                self.ack_number = (pack_syn.get_sequence_number() + 1) % MAX_SEQ_NUM
                 answer_syn.set_ACK(self.ack_number)
                 answer_syn.set_sequence_number(self.sequence_number)
                 pack_ack_syn = self.__send_and_wait_syn(answer_syn, TOTAL_RETRIES, add_syn)
-                if pack_ack_syn is not None and pack_ack_syn.get_ACK() == self.sequence_number + 1:
-                    self.sequence_number += 1
+                if pack_ack_syn is not None and pack_ack_syn.get_ACK() == (self.sequence_number + 1) % MAX_SEQ_NUM:
+                    self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
                     self.adress = add_syn
                     self._is_connected = True
                     self.recv_base = pack_ack_syn.get_sequence_number()
@@ -66,10 +67,10 @@ class SocketRDT_SR:
         syn.set_sequence_number(self.sequence_number)
         answer_connect = self.__send_and_wait_syn(syn, TOTAL_RETRIES, self.adress)
         if answer_connect is not None and answer_connect.want_SYN():
-            self.ack_number = answer_connect.get_sequence_number() + 1
+            self.ack_number = (answer_connect.get_sequence_number() + 1) % MAX_SEQ_NUM
             final_ack = Package()
             final_ack.set_ACK(self.ack_number)
-            self.sequence_number += 1
+            self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
             final_ack.set_sequence_number(self.sequence_number)
             self.socket.sendto(final_ack.packaging(), self.adress)
             self._is_connected = True
@@ -96,6 +97,9 @@ class SocketRDT_SR:
 
                 # guardar en el buffer de enviados
                 self.sent_buffer[self.next_seq + len(data_chunk)] = (pack, time.time())
+                
+                # guardo en la cola el ack que espero
+                self.ack_to_move_window.append(len(data_chunk))
 
                 # enviar paquete
                 self.socket.sendto(pack.packaging(), self.adress)
@@ -113,13 +117,20 @@ class SocketRDT_SR:
                 pack.decode_to_package(recived_bytes)
                 ack_seq = pack.get_ack_number()
                 print(f"[CLIENTE] Llego ACK con sequence number {ack_seq}")
+                print(f"[ClIENTE] ACK_SEQ: {ack_seq}")
+                print(f"[CLIENTE] self.sent_buffer: {self.sent_buffer}")
                 if ack_seq in self.sent_buffer:
                     self.acked.add(ack_seq)
                     print(f"[CLIENTE] Paquete con ack number {ack_seq} dentro de la ventana de recepcion")
-                    del self.sent_buffer[ack_seq]
                     # avanzar send_base al menor seq no ACKeado
-                    while self.send_base in self.acked:
-                        self.send_base += 1
+                    del self.sent_buffer[ack_seq]
+                    print(f"[CLIENTE] ACK recibido para self.acked {self.acked}")
+                    print(f"[CLIENTE] ACK recibido para self.acked {self.send_base  }")
+                    while self.next_seq in self.acked:
+                        print(f"[CLIENTE] ACK recibido para el paquete con seq {self.send_base}")
+                        self.send_base = self.next_seq
+                        self.acked.remove(self.send_base)
+                        print(f"[CLIENTE] ACK recibido para el paquete con seq {self.send_base}")
                         #me falta eliminar send_base de acked para que no sea infinito
 
             except TimeoutError:
@@ -175,7 +186,7 @@ class SocketRDT_SR:
                 # aca se puede procesar el paquete
                 data = self.recv_buffer[self.recv_base]
                 print(f"[RECEPTOR] Paquete con seq {self.recv_base} procesado")
-                print(f"[RECEPTOR] DATA: {data} ")
+                # print(f"[RECEPTOR] DATA: {data} ")
 
                 # eliminar del buffer
                 del self.recv_buffer[self.recv_base]
@@ -224,14 +235,14 @@ class SocketRDT_SR:
         self.ack_number += 1
         ack_fin.set_ACK(self.ack_number)
         ack_fin.set_sequence_number(self.sequence_number)
-        self.sequence_number += 1
+        self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
         data = ack_fin.packaging()
         self.socket.sendto(data, self.adress)
         # mando el fin ahora
         fin = Package()
         fin.set_FIN()
         fin.set_sequence_number(self.sequence_number)
-        self.sequence_number += 1
+        self.sequence_number  = (self.sequence_number + 1) % MAX_SEQ_NUM
         data = fin.packaging()
         self.socket.sendto(data, self.adress)
         # espero el ack
@@ -262,7 +273,7 @@ class SocketRDT_SR:
                 data_rcv, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
                 answer = Package()
                 answer.decode_to_package(data_rcv)
-                if answer.get_ACK() == self.sequence_number + 1:
+                if answer.get_ACK() == (self.sequence_number + 1) % MAX_SEQ_NUM:
                     self.socket.settimeout(None)
                     return answer
             except socket.timeout:

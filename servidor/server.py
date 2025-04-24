@@ -35,6 +35,6 @@ i = 0
 while True:
     #data = skt.recv_all()
     data = skt.recv()
-    print(f"Recibido {i}: {data.decode('utf-8')}")
+    # print(f"Recibido {i}: {data.decode('utf-8')}")
     i+=1
 
