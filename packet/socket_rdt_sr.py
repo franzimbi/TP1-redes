@@ -103,6 +103,7 @@ class SocketRDT_SR:
 
                 # enviar paquete
                 self.socket.sendto(pack.packaging(), self.adress)
+                print(f"[CLIENTE] Enviado paquete con contenido {pack.get_data()}")
                 print(f"[CLIENTE] Enviado paquete con seq {self.next_seq}")
 
 
@@ -117,7 +118,6 @@ class SocketRDT_SR:
                 pack.decode_to_package(recived_bytes)
                 ack_seq = pack.get_ack_number()
                 print(f"[CLIENTE] Llego ACK con sequence number {ack_seq}")
-                print(f"[ClIENTE] ACK_SEQ: {ack_seq}")
                 print(f"[CLIENTE] self.sent_buffer: {self.sent_buffer}")
                 if ack_seq in self.sent_buffer:
                     self.acked.add(ack_seq)
@@ -125,13 +125,16 @@ class SocketRDT_SR:
                     # avanzar send_base al menor seq no ACKeado
                     del self.sent_buffer[ack_seq]
                     print(f"[CLIENTE] ACK recibido para self.acked {self.acked}")
-                    print(f"[CLIENTE] ACK recibido para self.acked {self.send_base  }")
-                    while self.next_seq in self.acked:
-                        print(f"[CLIENTE] ACK recibido para el paquete con seq {self.send_base}")
-                        self.send_base = self.next_seq
-                        self.acked.remove(self.send_base)
-                        print(f"[CLIENTE] ACK recibido para el paquete con seq {self.send_base}")
-                        #me falta eliminar send_base de acked para que no sea infinito
+                    print(f"[CLIENTE] send base es: {self.send_base  }")
+                    next_ack = self.send_base + len(data_chunk)
+                    while next_ack in self.acked:
+                        self.acked.remove(next_ack)
+                        if self.ack_to_move_window:
+                            self.send_base += self.ack_to_move_window.popleft()
+                            print(f"[CLIENTE] send base desp de mover ventana es {self.send_base}")
+                        else:
+                            print("[CLIENTE] WARNING: ack_to_move_window vacío al mover ventana")
+                            break
 
             except TimeoutError:
                 pass
@@ -144,14 +147,15 @@ class SocketRDT_SR:
                 if (current_time - send_time) > TIMEOUT:
                     msg = self.sent_buffer[seq]
                     self.socket.sendto(msg[0].packaging(), (self.adress, self.dest_port))
-                    self.sent_buffer[seq] = current_time
+                    self.sent_buffer[seq] = (msg[0], current_time)
+
 
 
 
     
     def recv(self): #hacer q no sea bloqueante, q un thread lo llame a recv y guarde en un buffer los paquetes continuamente
         if not self._is_connected:
-            raise Exception("[SERVER]Socket no conectado")
+            return None
     
         #buffer = []
 
@@ -166,7 +170,8 @@ class SocketRDT_SR:
         # verificar si el paquete es FIN
         if pack.want_FIN():
             self._is_connected = False
-            return self.__end_connection()
+            self.__end_connection()
+            return None
 
         # si el paquete esta dentro de la ventana de recepcion
         if self.recv_base <= seq_num < self.recv_base + WINDOW_SIZE:

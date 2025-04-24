@@ -35,6 +35,9 @@ i = 0
 while True:
     #data = skt.recv_all()
     data = skt.recv()
+    if data is None:
+        print("[SERVIDOR] Conexión finalizada.")
+        break
     # print(f"Recibido {i}: {data.decode('utf-8')}")
     i+=1
 
