@@ -27,13 +27,13 @@ class SocketRDT_SR:
         #emisor
         self.send_base = self.sequence_number     # Primer número de secuencia aún no ACKeado (emisor)
         self.next_seq = self.sequence_number      # Próximo número de secuencia a usar para enviar (emisor)
-        self.sent_buffer = {}   # seq_num -> (Package, timestamp)
-        self.acked = {}      # Conjunto de seq_num que fueron ACKeados
-        self.ack_to_move_window  = deque()
+        self.hilos = {} # diccionario de hilos
+        self.acked = {} # diccionario de acked
+        self.stop_events = {} # diccionario de stop events
+        self.shared = {} # diccionario de variables compartidas
         #receptor
         self.recv_base = 0      # Primer número de secuencia esperada (receptor)
         self.recv_buffer = {}    # clave: número de secuencia, valor: datos
-        self.lock = threading.Lock()
 
     def bind(self):
         self.socket.bind(self.adress)
@@ -92,11 +92,6 @@ class SocketRDT_SR:
                 pack.set_data(data_chunk)
                 pack.set_sequence_number(self.next_seq)
 
-                # guardar en el buffer de enviados
-                self.sent_buffer[self.next_seq + len(data_chunk)] = pack
-                # guardo en la cola el ack que espero
-                self.ack_to_move_window.append(len(data_chunk))
-
                 # enviar paquete
                 self.socket.sendto(pack.packaging(), self.adress)
                 print(f"[CLIENTE] Enviado paquete con contenido {pack.get_data()}")
@@ -104,9 +99,15 @@ class SocketRDT_SR:
 
                 self.next_seq += len(data_chunk)
 
-                hilo = threading.Thread(target=self.controlar_timeout, args=(self.next_seq,))
+                self.shared[self.next_seq] = [0]
+                self.stop_events[self.next_seq] = threading.Event()
+
+                hilo = threading.Thread(target=self.controlar_timeout,args=(pack, self.shared[self.next_seq], self.stop_events[self.next_seq]))
                 hilo.daemon = True  # << esto hace que se termine si el main se va
                 hilo.start()
+
+                #guardar hilo en diccionario de hilos
+                self.hilos[self.next_seq] = hilo
                 
                 print(f"[CLIENTE] Next sequence number {self.next_seq}")
                 offset += len(data_chunk)
@@ -118,26 +119,24 @@ class SocketRDT_SR:
                 pack.decode_to_package(recived_bytes)
                 ack_seq = pack.get_ack_number()
                 print(f"[CLIENTE] Llego ACK con sequence number {ack_seq}")
-                print(f"[CLIENTE] self.sent_buffer: {self.sent_buffer}")
-                with self.lock:   
-                    if ack_seq in self.sent_buffer:
-                        b_data = self.sent_buffer[ack_seq]
-                        self.acked[ack_seq] = b_data.get_data_length() # esto vincula el ack que esperas recibir con el tamaño del paquete de ese ack
-                        print(f"[CIENTE] Paquete con ack number {ack_seq} dentro de la ventana de recepcion")
-                        # avanzar send_base al menor seq no ACKeado
-                        del self.sent_buffer[ack_seq]
-                        print(f"[CLIENTE] ACK recibido para self.acked {self.acked}")
-                        print(f"[CLIENTE] send base es: {self.send_base  }")
-                        next_ack = self.send_base + len(data_chunk)
-                        while next_ack in self.acked:
-                            lenght = self.acked[next_ack]
-                            print(f"[RECEPTOR] Paquete con seq {self.send_base} procesado")
+                if ack_seq in self.hilos:
+                    print(f"[CIENTE] Paquete con ack number {ack_seq} dentro de la ventana de recepcion")
+                    # parar el hilo específico
+                    self.stop_events[ack_seq].set()
 
-                            # eliminar del acked
-                            del self.acked[next_ack]
-                        
-                            #avanzar la ventana 
-                            self.send_base += lenght
+                    self.hilos[ack_seq].join() 
+                    len_pack_hilo = self.shared[ack_seq][0] # obtener el len del hilo
+                    self.acked[ack_seq - len_pack_hilo] = len_pack_hilo # guardar el len en el diccionario de acked
+                    print(f"[CLIENTE] send base es: {self.send_base  }")
+                    while self.send_base in self.acked:
+                        lenght = self.acked[self.send_base]
+                        print(f"[RECEPTOR] Paquete con seq {self.send_base} procesado")
+
+                        # eliminar del acked
+                        del self.acked[self.send_base]
+                    
+                        #avanzar la ventana 
+                        self.send_base += lenght
 
             except TimeoutError:
                 pass
@@ -153,26 +152,22 @@ class SocketRDT_SR:
             #         self.sent_buffer[seq] = (msg[0], current_time)
 
 
-    def controlar_timeout(self, seq):
-        while True:
+    def controlar_timeout(self, pack, variable_compartida, stop_event):
+        while not stop_event.is_set():
             time.sleep(TIMEOUT)
+            
+            self.retransmit(pack)
 
-            with self.lock:
-                if seq in self.acked:
-                    break  # ACK recibido, no se necesita retransmitir
-                print(f"[TIMEOUT] Reenviando paquete {seq}")
-                paquete = self.sent_buffer[seq]
+        variable_compartida[0] = pack.get_data_length()
+        print(f"[CLIENTE] Hilo con seq {pack.get_sequence_number()} terminado")
 
-                self.retransmit(paquete)
+
 
     def retransmit(self, paquete):
         # Reenviar el paquete
         self.socket.sendto(paquete.packaging(), self.adress)
         print(f"[CLIENTE] Reenviado paquete con seq {paquete.get_sequence_number()}")
       
-
-
-
 
     
     def recv(self): #hacer q no sea bloqueante, q un thread lo llame a recv y guarde en un buffer los paquetes continuamente
