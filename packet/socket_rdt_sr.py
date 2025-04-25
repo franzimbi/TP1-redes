@@ -26,11 +26,11 @@ class SocketRDT_SR:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         #emisor
         self.send_base = self.sequence_number     # Primer número de secuencia aún no ACKeado (emisor)
-        self.next_seq = self.sequence_number      # Próximo número de secuencia a usar para enviar (emisor)
-        self.hilos = {} # diccionario de hilos
-        self.acked = {} # diccionario de acked
+        self.next_seq_number = self.sequence_number      # Próximo número de secuencia a usar para enviar (emisor)
+        self.thrds = {} # diccionario de thrds
+        self.packages_acked = {} # diccionario de acked
         self.stop_events = {} # diccionario de stop events
-        self.shared = {} # diccionario de variables compartidas
+        self.shared_lenghts = {} # diccionario de variables compartidas
         #receptor
         self.recv_base = 0      # Primer número de secuencia esperada (receptor)
         self.recv_buffer = {}    # clave: número de secuencia, valor: datos
@@ -73,7 +73,7 @@ class SocketRDT_SR:
             self._is_connected = True
             #inicializo la ventana
             self.send_base = self.sequence_number
-            self.next_seq = self.send_base
+            self.next_seq_number = self.send_base
             print(f"[CLIENTE] FIRST send_base {self.send_base}")
 
 
@@ -83,92 +83,100 @@ class SocketRDT_SR:
 
         total_size = len(data)
         offset = 0
-        chunk_size = 1024
+        chunk_size = 1024 
+        window_chunk_size = chunk_size * WINDOW_SIZE
         
         while offset < total_size:
-            if self.next_seq < self.send_base + chunk_size * WINDOW_SIZE:
+            if self.send_base <= self.next_seq_number + chunk_size < self.send_base + window_chunk_size:
                 data_chunk = data[offset:offset + chunk_size]
-                pack = Package()
-                pack.set_data(data_chunk)
-                pack.set_sequence_number(self.next_seq)
 
-                # enviar paquete
-                self.socket.sendto(pack.packaging(), self.adress)
-                print(f"[CLIENTE] Enviado paquete con contenido {pack.get_data()}")
-                print(f"[CLIENTE] Enviado paquete con seq {self.next_seq}")
-
-                self.next_seq += len(data_chunk)
-
-                self.shared[self.next_seq] = [0]
-                self.stop_events[self.next_seq] = threading.Event()
-
-                hilo = threading.Thread(target=self.controlar_timeout,args=(pack, self.shared[self.next_seq], self.stop_events[self.next_seq]))
-                hilo.daemon = True  # << esto hace que se termine si el main se va
-                hilo.start()
-
-                #guardar hilo en diccionario de hilos
-                self.hilos[self.next_seq] = hilo
+                self._send_data(data_chunk)
                 
-                print(f"[CLIENTE] Next sequence number {self.next_seq}")
                 offset += len(data_chunk)
 
                 # revisar ACKs
             try:
-                recived_bytes, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
-                pack = Package()
-                pack.decode_to_package(recived_bytes)
-                ack_seq = pack.get_ack_number()
-                print(f"[CLIENTE] Llego ACK con sequence number {ack_seq}")
-                if ack_seq in self.hilos:
-                    print(f"[CIENTE] Paquete con ack number {ack_seq} dentro de la ventana de recepcion")
-                    # parar el hilo específico
-                    self.stop_events[ack_seq].set()
-
-                    self.hilos[ack_seq].join() 
-                    len_pack_hilo = self.shared[ack_seq][0] # obtener el len del hilo
-                    self.acked[ack_seq - len_pack_hilo] = len_pack_hilo # guardar el len en el diccionario de acked
-                    print(f"[CLIENTE] send base es: {self.send_base  }")
-                    while self.send_base in self.acked:
-                        lenght = self.acked[self.send_base]
-                        print(f"[RECEPTOR] Paquete con seq {self.send_base} procesado")
-
-                        # eliminar del acked
-                        del self.acked[self.send_base]
-                    
-                        #avanzar la ventana 
-                        self.send_base += lenght
+                self._check_ACKs()
 
             except TimeoutError:
                 pass
 
+    def _send_data(self, data):
+        pack = Package()
+        pack.set_data(data)
+        pack.set_sequence_number(self.next_seq_number)
 
-            # for ack in self.acked:
-            #     print(f"[CLIENTE] ACK RECIBIDOS: {ack}")
-            # current_time = time.time()
-            # for seq, send_time in list(self.sent_buffer.items()):
-            #     if (current_time - send_time) > TIMEOUT:
-            #         msg = self.sent_buffer[seq]
-            #         self.socket.sendto(msg[0].packaging(), (self.adress, self.dest_port))
-            #         self.sent_buffer[seq] = (msg[0], current_time)
+        self.socket.sendto(pack.packaging(), self.adress)
+        print(f"[CLIENTE] Enviado paquete con contenido {pack.get_data()}")
+        print(f"[CLIENTE] Enviado paquete con seq {self.next_seq_number}")
 
+        self.next_seq_number += len(data)
 
-    def controlar_timeout(self, pack, variable_compartida, stop_event):
-        while not stop_event.is_set():
-            time.sleep(TIMEOUT)
+        print(f"[CLIENTE] Next sequence number {self.next_seq_number}")
+
+        self._create_thrd(pack) # crear el hilo para controlar el timeout
+
+    def _create_thrd(self, pack):
+        self.shared_lenghts[self.next_seq_number] = [0]
+        self.stop_events[self.next_seq_number] = threading.Event()
+
+        thrd = threading.Thread(target=self._controlar_timeout,args=(pack, self.shared_lenghts[self.next_seq_number], self.stop_events[self.next_seq_number]))
+        thrd.daemon = True  # << esto hace que se termine si el main se va
+        thrd.start()
+
+        #guardar hilo en diccionario de hilos
+        self.thrds[self.next_seq_number] = thrd
+
+    def _check_ACKs(self):
+        recived_bytes, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
+        pack = Package()
+        pack.decode_to_package(recived_bytes)
+        pack_ack = pack.get_ack_number()
+        print(f"[CLIENTE] Llego ACK con sequence number {pack_ack}")
+        if pack_ack in self.thrds:
+            print(f"[CIENTE] Paquete con ack number {pack_ack} dentro de la ventana de recepcion")
+            # parar el hilo específico
+            self.stop_events[pack_ack].set()
+
+            self.thrds[pack_ack].join() 
+
+            len_pack_thrd = self.shared_lenghts[pack_ack][0] # obtener el len del hilo
+
+            self._delete_thrd(pack_ack)
+
+            self.packages_acked[pack_ack - len_pack_thrd] = len_pack_thrd # guardar el len en el diccionario de acked
+            print(f"[CLIENTE] send base es: {self.send_base  }")
+            while self.send_base in self.packages_acked:
+                lenght = self.packages_acked[self.send_base]
+                print(f"[RECEPTOR] Paquete con seq {self.send_base} procesado")
+
+                # eliminar del acked
+                del self.packages_acked[self.send_base]
             
-            self.retransmit(pack)
+                #avanzar la ventana 
+                self.send_base += lenght
+
+
+    def _delete_thrd(self, pack_ack):
+        del self.thrds[pack_ack] 
+        del self.stop_events[pack_ack]
+        del self.shared_lenghts[pack_ack]
+
+    def _controlar_timeout(self, pack, variable_compartida, stop_event):
+        while not stop_event.is_set():
+
+            if stop_event.wait(TIMEOUT): 
+                break
+            
+            self._retransmit(pack)
 
         variable_compartida[0] = pack.get_data_length()
-        print(f"[CLIENTE] Hilo con seq {pack.get_sequence_number()} terminado")
+        print(f"[CLIENTE] thrd con seq {pack.get_sequence_number()} terminado")
 
-
-
-    def retransmit(self, paquete):
+    def _retransmit(self, paquete):
         # Reenviar el paquete
         self.socket.sendto(paquete.packaging(), self.adress)
         print(f"[CLIENTE] Reenviado paquete con seq {paquete.get_sequence_number()}")
-      
-
     
     def recv(self): #hacer q no sea bloqueante, q un thread lo llame a recv y guarde en un buffer los paquetes continuamente
         if not self._is_connected:
