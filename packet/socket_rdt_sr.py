@@ -6,6 +6,7 @@ import random
 import numpy as np
 import threading
 import time
+import threading #si, lo vamos a usar
 
 TIMEOUT = 1.0  # segundos
 
@@ -27,16 +28,12 @@ class SocketRDT_SR:
         self.send_base = self.sequence_number     # Primer número de secuencia aún no ACKeado (emisor)
         self.next_seq = self.sequence_number      # Próximo número de secuencia a usar para enviar (emisor)
         self.sent_buffer = {}   # seq_num -> (Package, timestamp)
-        self.acked = set()      # Conjunto de seq_num que fueron ACKeados
+        self.acked = {}      # Conjunto de seq_num que fueron ACKeados
         self.ack_to_move_window  = deque()
         #receptor
         self.recv_base = 0      # Primer número de secuencia esperada (receptor)
         self.recv_buffer = {}    # clave: número de secuencia, valor: datos
-
-        self.timers = {}  # seq_num: start_time
-        self.timer_manager_running = False
-
-
+        self.lock = threading.Lock()
 
     def bind(self):
         self.socket.bind(self.adress)
@@ -96,8 +93,7 @@ class SocketRDT_SR:
                 pack.set_sequence_number(self.next_seq)
 
                 # guardar en el buffer de enviados
-                self.sent_buffer[self.next_seq + len(data_chunk)] = (pack, time.time())
-                
+                self.sent_buffer[self.next_seq + len(data_chunk)] = pack
                 # guardo en la cola el ack que espero
                 self.ack_to_move_window.append(len(data_chunk))
 
@@ -106,8 +102,12 @@ class SocketRDT_SR:
                 print(f"[CLIENTE] Enviado paquete con contenido {pack.get_data()}")
                 print(f"[CLIENTE] Enviado paquete con seq {self.next_seq}")
 
-
                 self.next_seq += len(data_chunk)
+
+                hilo = threading.Thread(target=self.controlar_timeout, args=(self.next_seq,))
+                hilo.daemon = True  # << esto hace que se termine si el main se va
+                hilo.start()
+                
                 print(f"[CLIENTE] Next sequence number {self.next_seq}")
                 offset += len(data_chunk)
 
@@ -119,35 +119,57 @@ class SocketRDT_SR:
                 ack_seq = pack.get_ack_number()
                 print(f"[CLIENTE] Llego ACK con sequence number {ack_seq}")
                 print(f"[CLIENTE] self.sent_buffer: {self.sent_buffer}")
-                if ack_seq in self.sent_buffer:
-                    self.acked.add(ack_seq)
-                    print(f"[CLIENTE] Paquete con ack number {ack_seq} dentro de la ventana de recepcion")
-                    # avanzar send_base al menor seq no ACKeado
-                    del self.sent_buffer[ack_seq]
-                    print(f"[CLIENTE] ACK recibido para self.acked {self.acked}")
-                    print(f"[CLIENTE] send base es: {self.send_base  }")
-                    next_ack = self.send_base + len(data_chunk)
-                    while next_ack in self.acked:
-                        self.acked.remove(next_ack)
-                        if self.ack_to_move_window:
-                            self.send_base += self.ack_to_move_window.popleft()
-                            print(f"[CLIENTE] send base desp de mover ventana es {self.send_base}")
-                        else:
-                            print("[CLIENTE] WARNING: ack_to_move_window vacío al mover ventana")
-                            break
+                with self.lock:   
+                    if ack_seq in self.sent_buffer:
+                        b_data = self.sent_buffer[ack_seq]
+                        self.acked[ack_seq] = b_data.get_data_length() # esto vincula el ack que esperas recibir con el tamaño del paquete de ese ack
+                        print(f"[CIENTE] Paquete con ack number {ack_seq} dentro de la ventana de recepcion")
+                        # avanzar send_base al menor seq no ACKeado
+                        del self.sent_buffer[ack_seq]
+                        print(f"[CLIENTE] ACK recibido para self.acked {self.acked}")
+                        print(f"[CLIENTE] send base es: {self.send_base  }")
+                        next_ack = self.send_base + len(data_chunk)
+                        while next_ack in self.acked:
+                            lenght = self.acked[next_ack]
+                            print(f"[RECEPTOR] Paquete con seq {self.send_base} procesado")
+
+                            # eliminar del acked
+                            del self.acked[next_ack]
+                        
+                            #avanzar la ventana 
+                            self.send_base += lenght
 
             except TimeoutError:
                 pass
 
 
-            for ack in self.acked:
-                print(f"[CLIENTE] ACK RECIBIDOS: {ack}")
-            current_time = time.time()
-            for seq, send_time in list(self.sent_buffer.items()):
-                if (current_time - send_time) > TIMEOUT:
-                    msg = self.sent_buffer[seq]
-                    self.socket.sendto(msg[0].packaging(), (self.adress, self.dest_port))
-                    self.sent_buffer[seq] = (msg[0], current_time)
+            # for ack in self.acked:
+            #     print(f"[CLIENTE] ACK RECIBIDOS: {ack}")
+            # current_time = time.time()
+            # for seq, send_time in list(self.sent_buffer.items()):
+            #     if (current_time - send_time) > TIMEOUT:
+            #         msg = self.sent_buffer[seq]
+            #         self.socket.sendto(msg[0].packaging(), (self.adress, self.dest_port))
+            #         self.sent_buffer[seq] = (msg[0], current_time)
+
+
+    def controlar_timeout(self, seq):
+        while True:
+            time.sleep(TIMEOUT)
+
+            with self.lock:
+                if seq in self.acked:
+                    break  # ACK recibido, no se necesita retransmitir
+                print(f"[TIMEOUT] Reenviando paquete {seq}")
+                paquete = self.sent_buffer[seq]
+
+                self.retransmit(paquete)
+
+    def retransmit(self, paquete):
+        # Reenviar el paquete
+        self.socket.sendto(paquete.packaging(), self.adress)
+        print(f"[CLIENTE] Reenviado paquete con seq {paquete.get_sequence_number()}")
+      
 
 
 
