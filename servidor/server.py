@@ -16,6 +16,7 @@ def main():
     skt = SocketRDT_SR("localhost", 8081)
     acceptor = Acceptor(skt)
     accepter = t.Thread(target=acceptor.run, args=("localhost", 8081, "server"))
+    accepter.daemon = True
     accepter.start()
 
     while True:

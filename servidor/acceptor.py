@@ -11,8 +11,11 @@ class Acceptor():
         try:
             while self._keep_running:
                 peer = self.skt.accept()
+                print(f"[acceptor.py]: Accepted connection from peer")
                 client = Client(peer)
+                print ("[acceptor.py]: client fue creado")
                 client.start()
+                print ("[acceptor.py]: client fue iniciado")
                 self.clients.append(client)
                 self.reap_dead()
         except Exception as e:

@@ -6,8 +6,10 @@ class ProtocolServer:
         self.socket = conection
 
     def recv_service_option(self):
-        
-        data = self.socket.recv(1024)
+        print ("[protocol_server.py]: antes del recv")
+        data = self.socket.recv()
+        print ("[protocol_server.py]: despues del recv") #no se esta imprimiendo este -> no toy recibiendo nada
+        return data
         
     def recv_file(self, file):
         data_bytes = self.socket.recv_all()

@@ -16,7 +16,6 @@ TOTAL_RETRIES = 5
 WINDOW_SIZE = 4
 MAX_SEQ_NUM = 2**16 - 1
 
-
 class SocketRDT_SR:
     def __init__(self, host, port):
         self.sequence_number = random.randint(0, 2**16 - 1)
@@ -37,7 +36,7 @@ class SocketRDT_SR:
 
     def bind(self):
         self.socket.bind(self.adress)
-        print(f"[SERVIDOR] Escuchando en {self.adress}")
+        print(f"[SR.SERVIDOR] Escuchando en {self.adress}")
     
     def accept(self):
         self.bind()
@@ -65,7 +64,7 @@ class SocketRDT_SR:
                     new_socket.socket.bind(("", 0))  #q el sistema operativo elija un puerto libre
                     new_socket.socket.connect(addr_syn)  # conectar el socket nuevo al cliente
                     
-                    new_socket.address = addr_syn
+                    new_socket.adress = addr_syn
                     new_socket._is_connected = True
 
                    
@@ -84,29 +83,8 @@ class SocketRDT_SR:
                     new_socket.recv_base = pack_ack_syn.get_sequence_number()
                     new_socket.recv_buffer = {}
 
-                    print(f"[SERVIDOR] Nueva conexión aceptada de {addr_syn}")
+                    print(f"[SR.SERVIDOR] Nueva conexión aceptada de {addr_syn}")
                     return new_socket
-                    
-
-
-    def _handle_new_connection(self, pack_syn, addr_syn):
-        # Crear nuevo socket solo para esta conexión
-        socket_nuevo = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        socket_nuevo.bind(("", 0))  # Que el sistema operativo elija un puerto libre
-        nuevo_host, nuevo_port = socket_nuevo.getsockname()  # obtener (host, puerto) asignados
-
-        # Crear nueva conexión confiable usando el host y puerto
-        connection = SocketRDT_SR(nuevo_host, nuevo_port)
-
-        # Reemplazar el socket por el que ya habías creado
-        connection.socket = socket_nuevo  # sobrescribo el socket interno con el que ya creaste y bindiaste
-
-        # (Opcional) Guardarlo en alguna lista si querés trackear las conexiones abiertas
-        self.conexiones.append(connection)
-
-        # Ahora manejás toda la comunicación con ese cliente
-        connection.handle_client(pack_syn)
-
 
     def connect(self):
         syn = Package()
@@ -124,7 +102,7 @@ class SocketRDT_SR:
             #inicializo la ventana
             self.send_base = self.sequence_number
             self.next_seq_number = self.send_base
-            print(f"[CLIENTE] FIRST send_base {self.send_base}")
+            print(f"[SR_SENDER] FIRST send_base {self.send_base}")
 
 
     def send(self, data):
@@ -157,12 +135,12 @@ class SocketRDT_SR:
         pack.set_sequence_number(self.next_seq_number)
 
         self.socket.sendto(pack.packaging(), self.adress)
-        print(f"[CLIENTE] Enviado paquete con contenido {pack.get_data()}")
-        print(f"[CLIENTE] Enviado paquete con seq {self.next_seq_number}")
+        print(f"[SR_SENDER] Enviado paquete con contenido {pack.get_data()}")
+        print(f"[SR_SENDER] Enviado paquete con seq {self.next_seq_number}")
 
         self.next_seq_number += len(data)
 
-        print(f"[CLIENTE] Next sequence number {self.next_seq_number}")
+        print(f"[SR_SENDER] Next sequence number (ACK que espero recibir): {self.next_seq_number}")
 
         self._create_thrd(pack) # crear el hilo para controlar el timeout
 
@@ -182,7 +160,7 @@ class SocketRDT_SR:
         pack = Package()
         pack.decode_to_package(recived_bytes)
         pack_ack = pack.get_ack_number()
-        print(f"[CLIENTE] Llego ACK con sequence number {pack_ack}")
+        print(f"[SR_SENDER] Llego ACK con sequence number {pack_ack}")
         if pack_ack in self.thrds:
             print(f"[CIENTE] Paquete con ack number {pack_ack} dentro de la ventana de recepcion")
             # parar el hilo específico
@@ -195,10 +173,10 @@ class SocketRDT_SR:
             self._delete_thrd(pack_ack)
 
             self.packages_acked[pack_ack - len_pack_thrd] = len_pack_thrd # guardar el len en el diccionario de acked
-            print(f"[CLIENTE] send base es: {self.send_base  }")
+            print(f"[SR_SENDER] send base es: {self.send_base  }")
             while self.send_base in self.packages_acked:
                 lenght = self.packages_acked[self.send_base]
-                print(f"[RECEPTOR] Paquete con seq {self.send_base} procesado")
+                print(f"[SR.RECEPTOR] Paquete con seq {self.send_base} procesado")
 
                 # eliminar del acked
                 del self.packages_acked[self.send_base]
@@ -221,25 +199,30 @@ class SocketRDT_SR:
             self._retransmit(pack)
 
         variable_compartida[0] = pack.get_data_length()
-        print(f"[CLIENTE] thrd con seq {pack.get_sequence_number()} terminado")
+        print(f"[SR_SENDER] thrd con seq {pack.get_sequence_number()} terminado")
 
     def _retransmit(self, paquete):
         # Reenviar el paquete
         self.socket.sendto(paquete.packaging(), self.adress)
-        print(f"[CLIENTE] Reenviado paquete con seq {paquete.get_sequence_number()}")
+        print(f"[SR_SENDER] Reenviado paquete con seq {paquete.get_sequence_number()}")
     
     def recv(self): #hacer q no sea bloqueante, q un thread lo llame a recv y guarde en un buffer los paquetes continuamente
+        print(f"[SR.RECEPTOR]hola, entro a la funciona recv")
         if not self._is_connected:
+            print("[SR.RECEPTOR] Socket no conectado")
             return None
     
         #buffer = []
 
         # recibir paquete
-        recived_bytes, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
+        print(f"[SR.RECEPTOR] Recibiendo paquete")
+        recived_bytes = self.socket.recv(MAX_PACKAGE_SIZE)
+        print(f"[SR.RECEPTOR] Recibi paquete")
+        sender_adress = self.adress
         pack = Package()
         pack.decode_to_package(recived_bytes)
         seq_num = pack.get_sequence_number()  
-        print(f"[RECEPTOR] Recibi paquete con sequence number {seq_num}")
+        print(f"[SR.RECEPTOR] Recibi paquete con sequence number {seq_num}")
         data = pack.get_data()  
 
         # verificar si el paquete es FIN
@@ -258,15 +241,15 @@ class SocketRDT_SR:
             answer = Package()
             answer.set_ACK(ack_seq)
             answer.set_sequence_number(self.sequence_number)
-            self.socket.sendto(answer.packaging(), address)
-            print(f"[RECEPTOR] Enviado ACK para el paquete con seq {ack_seq}")
+            self.socket.sendto(answer.packaging(), sender_adress)
+            print(f"[SR.RECEPTOR] Enviado ACK para el paquete con seq {ack_seq}")
 
             # procesar paquetes en orden (si estan disponibles)
             while self.recv_base in self.recv_buffer:
                 # aca se puede procesar el paquete
                 data = self.recv_buffer[self.recv_base]
-                print(f"[RECEPTOR] Paquete con seq {self.recv_base} procesado")
-                # print(f"[RECEPTOR] DATA: {data} ")
+                print(f"[SR.RECEPTOR] Paquete con seq {self.recv_base} procesado")
+                # print(f"[SR.RECEPTOR] DATA: {data} ")
 
                 # eliminar del buffer
                 del self.recv_buffer[self.recv_base]
@@ -280,11 +263,11 @@ class SocketRDT_SR:
             answer = Package()
             answer.set_ACK(ack_seq)
             answer.set_sequence_number(self.sequence_number)
-            self.socket.sendto(answer.packaging(), address)
-            print(f"[RECEPTOR] Reenviando ACK para seq {ack_seq} (paquete duplicado con seq {seq_num})")
+            self.socket.sendto(answer.packaging(), sender_adress)
+            print(f"[SR.RECEPTOR] Reenviando ACK para seq {ack_seq} (paquete duplicado con seq {seq_num})")
         # ignorar el paquete si esta afuera de la ventana
         else:
-            print(f"[RECEPTOR] Paquete con seq {seq_num} fuera de la ventana de recepción")
+            print(f"[SR.RECEPTOR] Paquete con seq {seq_num} fuera de la ventana de recepción")
 
         return data
 
@@ -358,7 +341,7 @@ class SocketRDT_SR:
                     return answer
             except socket.timeout:
                 retries += 1
-                print(f"[Cliente] Timeout esperando ACK , reintentando... {retries}")
+                print(f"[SR_SENDER] Timeout esperando ACK , reintentando... {retries}")
 
         self.socket.settimeout(None)
         return None
