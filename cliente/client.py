@@ -3,8 +3,8 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # from packet.package import Package
-from packet.socket_rdt_sw import SocketRDT_SW
-from packet.socket_rdt_sr import SocketRDT_SR
+from common.socket_rdt_sw import SocketRDT_SW
+from common.socket_rdt_sr import SocketRDT_SR
 
 
 # BUFFER_SIZE = 4096

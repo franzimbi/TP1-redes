@@ -1,7 +1,7 @@
 import math
 import socket
 import time
-from packet.package import Package
+from common.package import Package
 import random
 import numpy as np
 
@@ -225,4 +225,10 @@ class SocketRDT_SW:
 
         self.socket.settimeout(None)
         return None
-    
+
+
+
+    def is_closed(self):
+        if not self._is_connected:
+            return True    
+        return False

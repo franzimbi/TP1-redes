@@ -1,9 +1,8 @@
-# import socket
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from packet.socket_rdt_sw import SocketRDT_SW
-from packet.socket_rdt_sr import SocketRDT_SR
+from common.socket_rdt_sw import SocketRDT_SW
+from common.socket_rdt_sr import SocketRDT_SR
 
 
 
@@ -26,18 +25,41 @@ from packet.socket_rdt_sr import SocketRDT_SR
 #     i += 1
 #     sock.sendto(response.encode(), address)
 
-skt = SocketRDT_SR("localhost", 8081)
+#skt = SocketRDT_SR("localhost", 8081)
 #skt = SocketRDT_SW("localhost", 8081)
 #skt = SocketRDT_SW("10.0.0.2", 8081)
 
-skt.bind()
-i = 0
-while True:
+#skt.bind()
+#i = 0
+#while True:
     #data = skt.recv_all()
-    data = skt.recv()
-    if data is None:
-        print("[SERVIDOR] Conexión finalizada.")
-        break
+    #data = skt.recv()
+    #if data is None:
+        #print("[SERVIDOR] Conexión finalizada.")
+        #break
     # print(f"Recibido {i}: {data.decode('utf-8')}")
-    i+=1
+    #i+=1
 
+import socket
+from protocol_server import ProtocolServer 
+from acceptor import Acceptor
+import threading as t
+
+BUFFER = 1024
+
+# __MAIN__
+def main():
+    #skt_handler = Handler(ip,port,mode)
+    skt = SocketRDT_SR("localhost", 8081)
+    #skt = SocketRDT_SW("localhost", 8081)
+    acceptor = Acceptor(skt)
+    accepter = t.Thread(target=acceptor.run, args=())
+    accepter.start()
+
+    while True:
+            input = input().rstrip()
+            if input == 'q':
+                break
+
+    acceptor.shutdown()
+    accepter.join()

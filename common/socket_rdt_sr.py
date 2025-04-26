@@ -1,7 +1,7 @@
 from collections import deque
 import socket
 import time
-from packet.package import Package
+from common.package import Package
 import random
 import numpy as np
 import threading
@@ -19,7 +19,7 @@ MAX_SEQ_NUM = 2**16 - 1
 
 class SocketRDT_SR:
     def __init__(self, host, port):
-        self.sequence_number = 0#random.randint(0, 2**16 - 1)
+        self.sequence_number = random.randint(0, 2**16 - 1)
         self.ack_number = 0
         self._is_connected = False
         self.adress = (host, port)
@@ -37,26 +37,76 @@ class SocketRDT_SR:
 
     def bind(self):
         self.socket.bind(self.adress)
+        print(f"[SERVIDOR] Escuchando en {self.adress}")
+    
+    def accept(self):
+        self.bind()
         while True:
-            # recibir el primer syn
-            data_syn, add_syn = self.socket.recvfrom(HEADER_SIZE)
+            #esperar el primer paquete(SYN)
+            data_syn, addr_syn = self.socket.recvfrom(HEADER_SIZE)
             pack_syn = Package()
             pack_syn.decode_to_package(data_syn)
-            if pack_syn.want_SYN(): #si es syn le mando mi SN y el ack
 
+            if pack_syn.want_SYN(): #si es syn le mando mi SN y el ack
+                #responder con SYN+ACK
                 answer_syn = Package()
                 answer_syn.set_SYN()
                 self.ack_number = (pack_syn.get_sequence_number() + 1) % MAX_SEQ_NUM
                 answer_syn.set_ACK(self.ack_number)
                 answer_syn.set_sequence_number(self.sequence_number)
-                pack_ack_syn = self.__send_and_wait_syn(answer_syn, TOTAL_RETRIES, add_syn)
+
+                #enviar SYN+ACK y esperar ACK final
+                pack_ack_syn = self.__send_and_wait_syn(answer_syn, TOTAL_RETRIES, addr_syn)
+
                 if pack_ack_syn is not None and pack_ack_syn.get_ACK() == (self.sequence_number + 1) % MAX_SEQ_NUM:
-                    self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
-                    self.adress = add_syn
-                    self._is_connected = True
-                    self.recv_base = pack_ack_syn.get_sequence_number()
-                    print(f"[SERVIDOR] FIRST recv_base {self.recv_base}")
-                    return True
+                    #handshake exitoso: crear socket nuevo para este cliente
+                    new_socket = SocketRDT_SR.__new__(SocketRDT_SR)
+                    new_socket.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    new_socket.socket.bind(("", 0))  #q el sistema operativo elija un puerto libre
+                    new_socket.socket.connect(addr_syn)  # conectar el socket nuevo al cliente
+                    
+                    new_socket.address = addr_syn
+                    new_socket._is_connected = True
+
+                   
+                    new_socket.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
+                    new_socket.ack_number = (pack_ack_syn.get_sequence_number() + 1) % MAX_SEQ_NUM
+
+                    
+                    new_socket.send_base = new_socket.sequence_number 
+                    new_socket.next_seq_number = new_socket.sequence_number
+
+                    new_socket.thrds = {} 
+                    new_socket.packages_acked = {} 
+                    new_socket.stop_events = {} 
+                    new_socket.shared_lenghts = {}
+
+                    new_socket.recv_base = pack_ack_syn.get_sequence_number()
+                    new_socket.recv_buffer = {}
+
+                    print(f"[SERVIDOR] Nueva conexión aceptada de {addr_syn}")
+                    return new_socket
+                    
+
+
+    def _handle_new_connection(self, pack_syn, addr_syn):
+        # Crear nuevo socket solo para esta conexión
+        socket_nuevo = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        socket_nuevo.bind(("", 0))  # Que el sistema operativo elija un puerto libre
+        nuevo_host, nuevo_port = socket_nuevo.getsockname()  # obtener (host, puerto) asignados
+
+        # Crear nueva conexión confiable usando el host y puerto
+        connection = SocketRDT_SR(nuevo_host, nuevo_port)
+
+        # Reemplazar el socket por el que ya habías creado
+        connection.socket = socket_nuevo  # sobrescribo el socket interno con el que ya creaste y bindiaste
+
+        # (Opcional) Guardarlo en alguna lista si querés trackear las conexiones abiertas
+        self.conexiones.append(connection)
+
+        # Ahora manejás toda la comunicación con ese cliente
+        connection.handle_client(pack_syn)
+
 
     def connect(self):
         syn = Package()
@@ -321,3 +371,9 @@ class SocketRDT_SR:
         p.set_sequence_number(seq)
         p.set_data(data)
         return p
+
+
+    def is_closed(self):
+        if not self._is_connected:
+            return True    
+        return False

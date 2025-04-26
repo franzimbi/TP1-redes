@@ -1,17 +1,16 @@
 import socket
+from protocol_server import ProtocolServer
+from common.socket_rdt_sw import SocketRDT_SW
 
 BUFFER = 1024
 
 # __MAIN__
-skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-skt.bind(('localhost', 8080))
+skt = SocketRDT_SW("localhost", 8081)
+skt.bind()
 
 skt.listen(1)
 conn, addr = skt.accept()
 print(f"Conexión establecida con {addr}")
 
-data = conn.recv(BUFFER)
-print(f"Recibido: {data.decode('utf-8')}")
-conn.sendall(b"hola de nuevo, soy el servidor")
-
-conn.close()    
+proto = ProtocolServer(conn)
+proto.recv_file("archivo.txt")
