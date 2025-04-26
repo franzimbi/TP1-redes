@@ -1,4 +1,6 @@
-import protocol_server
+from protocol_server import ProtocolServer
+import threading as t
+
 
 class Client:
     def __init__(self, skt):
@@ -8,9 +10,13 @@ class Client:
         self.thread = None
 
     def start(self):
-        self.protocol = ProtocolServer(self.skt)
-        self.thread = t.Thread(target=self._start_connection)
+        self.thread = t.Thread(target=self.start_connection)
+
+
+    def start_connection(self):
         self.thread.start() 
+        self.protocol = ProtocolServer(self.skt)
+
 
     def stop(self):
         self.is_alive = False

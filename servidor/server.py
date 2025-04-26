@@ -3,6 +3,33 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from common.socket_rdt_sw import SocketRDT_SW
 from common.socket_rdt_sr import SocketRDT_SR
+import threading as t
+import socket
+from protocol_server import ProtocolServer 
+from acceptor import Acceptor
+
+BUFFER = 1024
+
+# __MAIN__
+def main():
+    #skt_handler = Handler(ip,port,mode)
+    skt = SocketRDT_SR("localhost", 8081)
+    acceptor = Acceptor(skt)
+    accepter = t.Thread(target=acceptor.run, args=("localhost", 8081, "server"))
+    accepter.start()
+
+    while True:
+        user_input = input().rstrip()
+        if user_input == 'q':
+            break
+
+    acceptor.shutdown()
+    accepter.join()
+
+if __name__ == "__main__":
+    main()
+
+
 
 
 
@@ -40,26 +67,4 @@ from common.socket_rdt_sr import SocketRDT_SR
     # print(f"Recibido {i}: {data.decode('utf-8')}")
     #i+=1
 
-import socket
-from protocol_server import ProtocolServer 
-from acceptor import Acceptor
-import threading as t
 
-BUFFER = 1024
-
-# __MAIN__
-def main():
-    #skt_handler = Handler(ip,port,mode)
-    skt = SocketRDT_SR("localhost", 8081)
-    #skt = SocketRDT_SW("localhost", 8081)
-    acceptor = Acceptor(skt)
-    accepter = t.Thread(target=acceptor.run, args=())
-    accepter.start()
-
-    while True:
-            input = input().rstrip()
-            if input == 'q':
-                break
-
-    acceptor.shutdown()
-    accepter.join()

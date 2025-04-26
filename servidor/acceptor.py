@@ -1,14 +1,11 @@
 import sys
-import client
+from client import Client
 class Acceptor():
     
     def __init__(self, skt):
-        super().__init__()
         self.skt = skt
         self.clients = []
         self._keep_running = True
-        self.start()
-        #self.skt_hanlder = None
 
     def run(self,ip,port,mode):
         try:
@@ -17,7 +14,7 @@ class Acceptor():
                 client = Client(peer)
                 client.start()
                 self.clients.append(client)
-              #skt_hanlder  self.reap_dead()
+                self.reap_dead()
         except Exception as e:
             print(str(e), file=sys.stderr)
 
@@ -36,7 +33,7 @@ class Acceptor():
         self.skt.close()
 
     def __del__(self):
-        if self.clients_v:
-            for client in self.clients_v:
+        if self.clients:
+            for client in self.clients:
                 client.stop()
                 client.join()
