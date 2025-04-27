@@ -7,8 +7,8 @@ class ProtocolServer:
 
     def recv_service_option(self):
         print ("[protocol_server.py]: antes del recv")
-        data = self.socket.recv()
-        print ("[protocol_server.py]: despues del recv") #no se esta imprimiendo este -> no toy recibiendo nada
+        data = self.socket.process_package()
+        print ("[protocol_server.py]: despues del recv") 
         return data
         
     def recv_file(self, file):

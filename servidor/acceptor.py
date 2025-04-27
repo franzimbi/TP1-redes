@@ -7,7 +7,7 @@ class Acceptor():
         self.clients = []
         self._keep_running = True
 
-    def run(self,ip,port,mode):
+    def run(self):
         try:
             while self._keep_running:
                 peer = self.skt.accept()
@@ -17,9 +17,12 @@ class Acceptor():
                 client.start()
                 print ("[acceptor.py]: client fue iniciado")
                 self.clients.append(client)
+                print ("[acceptor.py]: client fue agregado a la lista")
                 self.reap_dead()
         except Exception as e:
+            print ("[acceptor.py]: Error en el acceptor")
             print(str(e), file=sys.stderr)
+
 
     def reap_dead(self):
         alive_clients = []
@@ -33,10 +36,13 @@ class Acceptor():
 
     def shutdown(self):
         self._keep_running = False
-        self.skt.close()
+        self.skt.close_server()
 
     def __del__(self):
         if self.clients:
+            i = 0
             for client in self.clients:
+                print ("[acceptor.py]: cerrando cliente numero: ", i)
+                i += 1
                 client.stop()
                 client.join()
