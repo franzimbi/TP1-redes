@@ -33,6 +33,7 @@ class SocketRDT_SR:
         #receptor
         self.recv_base = 0      # Primer número de secuencia esperada (receptor)
         self.recv_buffer = {}    # clave: número de secuencia, valor: datos
+        self.connections = {}    # diccionario de conexiones activas
 
     def bind(self):
         self.socket.bind(self.adress)
@@ -60,11 +61,9 @@ class SocketRDT_SR:
                 if pack_ack_syn is not None and pack_ack_syn.get_ACK() == (self.sequence_number + 1) % MAX_SEQ_NUM:
                     #handshake exitoso: crear socket nuevo para este cliente
                     new_socket = SocketRDT_SR.__new__(SocketRDT_SR)
-                    new_socket.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    new_socket.socket.bind(("", 0))  #q el sistema operativo elija un puerto libre
-                    new_socket.socket.connect(addr_syn)  # conectar el socket nuevo al cliente
+                    new_socket.socket = self.socket  #solo referencia, NO se crea otro
                     
-                    new_socket.adress = addr_syn
+                    new_socket.adress = addr_syn  #dirección del cliente asociado
                     new_socket._is_connected = True
 
                    
@@ -82,6 +81,8 @@ class SocketRDT_SR:
 
                     new_socket.recv_base = pack_ack_syn.get_sequence_number()
                     new_socket.recv_buffer = {}
+
+                    self.connections[addr_syn] = new_socket
 
                     print(f"[SR.SERVIDOR] Nueva conexión aceptada de {addr_syn}")
                     return new_socket
@@ -216,11 +217,21 @@ class SocketRDT_SR:
 
         # recibir paquete
         print(f"[SR.RECEPTOR] Recibiendo paquete")
-        recived_bytes = self.socket.recv(MAX_PACKAGE_SIZE)
+        recived_bytes, sender_adress = self.socket.recvfrom(MAX_PACKAGE_SIZE)
         print(f"[SR.RECEPTOR] Recibi paquete")
-        sender_adress = self.adress
+
         pack = Package()
         pack.decode_to_package(recived_bytes)
+
+        if sender_adress != self.adress:
+            data = self.connections[sender_adress].process_package(pack, sender_adress)
+            return data
+        data = self.process_package(pack, sender_adress)
+
+        return data
+
+    def process_package(self, pack, sender_adress):
+       
         seq_num = pack.get_sequence_number()  
         print(f"[SR.RECEPTOR] Recibi paquete con sequence number {seq_num}")
         data = pack.get_data()  
@@ -270,6 +281,7 @@ class SocketRDT_SR:
             print(f"[SR.RECEPTOR] Paquete con seq {seq_num} fuera de la ventana de recepción")
 
         return data
+
 
     def close(self):
         fin = Package()
