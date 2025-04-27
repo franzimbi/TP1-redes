@@ -23,14 +23,14 @@ class Client:
         while self.is_alive:            
             data = self.protocol.recv_service_option()
             if data is None:
-                print("[SERVIDOR] Conexión finalizada.")
+                print("[client.py] Conexión finalizada.")
                 break
 
 
     def stop(self):
         print("[client.py]: stopping client thread")
         self.is_alive = False
-        self.protocol.close()
+        #self.protocol.close()
     
     def join(self):
         self.thread.join()

@@ -11,21 +11,38 @@ from acceptor import Acceptor
 BUFFER = 1024
 
 # __MAIN__
+def recv_loop(socket_principal):
+    while True:
+        socket_principal.recv()
+
 def main():
-    #skt_handler = Handler(ip,port,mode)
-    skt = SocketRDT_SR("localhost", 8081)
+    skt = SocketRDT_SR("localhost", 8082)
+    skt.bind()
     acceptor = Acceptor(skt)
-    accepter = t.Thread(target=acceptor.run, args=("localhost", 8081, "server"))
+
+    accepter = t.Thread(target=acceptor.run)
     accepter.daemon = True
     accepter.start()
+
+    
+    recv_thread = t.Thread(target=recv_loop, args=(skt,))
+    recv_thread.daemon = True
+    recv_thread.start()
 
     while True:
         user_input = input().rstrip()
         if user_input == 'q':
+            print("Shutting down server...")
             break
 
+    print("1")
     acceptor.shutdown()
+    print("2")
     accepter.join()
+    print("3")
+    recv_thread.join() 
+    print("cerre")
+
 
 if __name__ == "__main__":
     main()
