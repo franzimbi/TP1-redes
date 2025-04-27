@@ -13,29 +13,44 @@ class ProtocolClient:
         self.type = type
 
     
-    def send_start_message(self, path, file):
-        self.file = file
-        start_msg = MessageInit(path, file)
-        bytes = start_msg.encode()
-        self.connection.send_all(bytes)
-        print(f"Sent start message: {start_msg}")
+    def send_start_message(self):
+        self.connection.sendall(self.type.encode())
 
-    def send_data_message(self, path_file):
-        print(f"PATH recibido: {path_file}")
-        print(f"EXISTE? {os.path.exists(path_file)}")
-        print(f"TAMAÑO: {os.path.getsize(path_file)}")
+    def send_file(self, path_file):
+        file = os.path.basename(path_file)
+        # mando path name
+        self.connection.sendall(len(file).to_bytes(32, byteorder='big'))
+        self.connection.sendall(file.encode('utf-8'))
+        # mando size del archivo
         size_file = os.path.getsize(path_file).to_bytes(32, byteorder='big')
-        self.connection.send_all(size_file)
+        self.connection.send(size_file)
+        # mando el archivo
         with open(path_file, 'rb') as f:
             while True:
                 print(f"enviando chunk de archivo")
                 chunk = f.read(1024)
                 if not chunk:
                     break
-                self.connection.send_all(chunk)
-
-        # with open(path_file, 'rb') as f:
-        #     while (chunk := f.read(CHUNK_SIZE)):
-        #         self.connection.sendall(chunk)
+                self.connection.sendall(chunk)
+        # close the file
         f.close()
         print(f"archivo entero mandado: {path_file}")
+
+    def recv_file(self):
+        # recibo el path name
+        path_size = self.connection.recv(32)
+        path_size = int.from_bytes(path_size, byteorder='big')
+        path_str = self.connection.recv(path_size).decode('utf-8')
+        # recibo el tamanio del archivo
+        data_bytes = self.connection.recv(32)
+        size_file = int.from_bytes(data_bytes, byteorder='big')
+        # recibo el archivo
+        with open(path_str, 'wb') as f:
+            for _ in range(int(size_file)):
+                print(f"recibiendo chunk de archivo")
+                chunk = self.connection.recv(1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+        f.close()
+        print(f"archivo entero recibido: {path_str}")

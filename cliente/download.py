@@ -1,12 +1,16 @@
+from protocol_client import ProtocolClient
 import socket
+# from common.socket_rdt_sw import SocketRDT_SW
 
-BUFFER = 1024
-
-# __MAIN__
+#__main__
 skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# skt = socket.socket('localhost', 8080)
+skt.connect(("localhost", 8080))
 
+protocol = ProtocolClient('D', skt)
 
-skt.connect(('localhost', 8080))
-skt.sendall(b'Hola, servidor!')
-data = skt.recv(BUFFER)
-print(f"Recibido: {data.decode('utf-8')}")
+protocol.send_start_message()
+protocol.recv_file()
+
+skt.close()
+print("Fin del cliente download")
