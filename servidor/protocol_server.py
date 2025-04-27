@@ -8,7 +8,8 @@ class ProtocolServer:
 
     def recv_service_option(self):
         print ("[protocol_server.py]: antes del recv")
-        data = self.socket.recv(1).decode('utf-8')
+        data = self.socket.process_package()
+        print ("[protocol_server.py]: despues del recv") 
         return data
         
     def recv_file(self):
