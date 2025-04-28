@@ -16,16 +16,19 @@ class ProtocolClient:
     def send_start_message(self):
         self.connection.sendall(self.type.encode())
 
-    def send_file(self, path_file):
-        file = os.path.basename(path_file)
-        # mando path name
+    def send_file(self, path, file):
+        # mando name
         self.connection.sendall(len(file).to_bytes(32, byteorder='big'))
         self.connection.sendall(file.encode('utf-8'))
         # mando size del archivo
-        size_file = os.path.getsize(path_file).to_bytes(32, byteorder='big')
+        file_complete = os.path.join(path, file)
+        if not os.path.isfile(file_complete):
+            print(f"archivo {file_complete} no encontrado")
+            return
+        size_file = os.path.getsize(file_complete).to_bytes(32, byteorder='big')
         self.connection.send(size_file)
         # mando el archivo
-        with open(path_file, 'rb') as f:
+        with open(file_complete, 'rb') as f:
             while True:
                 print(f"enviando chunk de archivo")
                 chunk = f.read(1024)
@@ -34,18 +37,21 @@ class ProtocolClient:
                 self.connection.sendall(chunk)
         # close the file
         f.close()
-        print(f"archivo entero mandado: {path_file}")
+        print(f"archivo entero mandado: {file_complete}")
 
-    def recv_file(self):
-        # recibo el path name
-        path_size = self.connection.recv(32)
-        path_size = int.from_bytes(path_size, byteorder='big')
-        path_str = self.connection.recv(path_size).decode('utf-8')
+    def recv_file(self, path, file):
+        # envio el file name
+        self.connection.sendall(len(file).to_bytes(32, byteorder='big'))
+        self.connection.sendall(file.encode('utf-8'))
         # recibo el tamanio del archivo
         data_bytes = self.connection.recv(32)
         size_file = int.from_bytes(data_bytes, byteorder='big')
         # recibo el archivo
-        with open(path_str, 'wb') as f:
+        file_complete = os.path.join(path, file)
+        if not os.path.exists(path):
+            print(f"directorio {path} no encontrado")
+            return
+        with open(file_complete, 'wb') as f:
             for _ in range(int(size_file)):
                 print(f"recibiendo chunk de archivo")
                 chunk = self.connection.recv(1024)
@@ -53,4 +59,4 @@ class ProtocolClient:
                     break
                 f.write(chunk)
         f.close()
-        print(f"archivo entero recibido: {path_str}")
+        print(f"archivo entero recibido: {file_complete}")

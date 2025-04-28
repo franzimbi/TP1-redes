@@ -10,7 +10,7 @@ skt.connect(("localhost", 8080))
 protocol = ProtocolClient('D', skt)
 
 protocol.send_start_message()
-protocol.recv_file()
+protocol.recv_file('storage_client', 'archivo_prueba.txt')
 
 skt.close()
 print("Fin del cliente download")
