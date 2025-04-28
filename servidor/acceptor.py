@@ -10,6 +10,7 @@ class Acceptor():
     def run(self):
         try:
             while self._keep_running:
+                print(f"[acceptor.py]: Waiting for accept for client")
                 peer = self.skt.accept()
                 print(f"[acceptor.py]: Accepted connection from peer")
                 client = Client(peer)

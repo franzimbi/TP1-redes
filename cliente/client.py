@@ -11,7 +11,7 @@ from common.socket_rdt_sr import SocketRDT_SR
 # PORT_DESTINO = 8086
 
 client = SocketRDT_SR("localhost", 8082)
-#client = SocketRDT_SW("10.0.0.2", 8081)
+#client = SocketRDT_SR("10.0.0.2", 8082)
 #client = SocketRDT_SW("localhost", 8081)
 
 client.connect()

@@ -16,18 +16,19 @@ def recv_loop(socket_principal):
         socket_principal.recv()
 
 def main():
+    #skt = SocketRDT_SR("10.0.0.2", 8082)
     skt = SocketRDT_SR("localhost", 8082)
     skt.bind()
     acceptor = Acceptor(skt)
+
+    recv_thread = t.Thread(target=recv_loop, args=(skt,))
+    recv_thread.daemon = True
+    recv_thread.start()
 
     accepter = t.Thread(target=acceptor.run)
     accepter.daemon = True
     accepter.start()
 
-    
-    recv_thread = t.Thread(target=recv_loop, args=(skt,))
-    recv_thread.daemon = True
-    recv_thread.start()
 
     while True:
         user_input = input().rstrip()

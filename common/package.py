@@ -56,7 +56,6 @@ class Package:
 
     def set_ACK(self, ack_number):
         self.ack_number = ack_number
-        self.set_ACK_FLAG()
 
     def get_ACK(self):
         return self.ack_number
