@@ -16,8 +16,8 @@ def recv_loop(socket_principal):
         socket_principal.recv()
 
 def main():
-    #skt = SocketRDT_SR("10.0.0.2", 8082)
-    skt = SocketRDT_SR("localhost", 8082)
+    skt = SocketRDT_SR("10.0.0.2", 8082)
+    #skt = SocketRDT_SR("localhost", 8082)
     skt.bind()
     acceptor = Acceptor(skt)
 
