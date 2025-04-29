@@ -18,8 +18,6 @@ class Client:
 
     def start_connection(self):
         print("[client.py]: entra al thread")
-        self.protocol = ProtocolServer(self.skt)
-        print("[client.py]: protocol server creado")
         while self.is_alive:            
             data = self.skt.process_package()
             if data is None:
