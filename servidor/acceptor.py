@@ -31,6 +31,10 @@ class Acceptor():
             if client.is_dead():
                 client.stop()
                 client.join()
+                adress = client.get_adress()
+                print ("[acceptor.py]: cliente muerto con adress: ", adress)
+                self.skt.close_client(adress)
+                print ("[acceptor.py]: cliente cerrado")
             else:
                 alive_clients.append(client)
         self.clients = alive_clients

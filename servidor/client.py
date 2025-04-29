@@ -24,6 +24,7 @@ class Client:
             data = self.skt.process_package()
             if data is None:
                 print("[client.py] Conexión finalizada.")
+                self.is_alive = False
                 break
 
     def stop(self):
@@ -33,6 +34,9 @@ class Client:
     
     def join(self):
         self.thread.join()
+    
+    def get_adress(self):
+        return self.skt.get_adress()
 
     def is_dead(self):
         if not self.is_alive:

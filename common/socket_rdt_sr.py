@@ -18,6 +18,8 @@ TOTAL_RETRIES = 5
 WINDOW_SIZE = 4
 MAX_SEQ_NUM = 2**16 - 1
 
+#HAY Q HACER UN TIMEOUT SI NO RECIBE MAS MENSAJES DESP DE CIERTO TIEMPO PARA QUE CORTE LA CONEXION Y SE DESPIDA
+
 class SocketRDT_SR:
     def __init__(self, host, port):
         self.sequence_number = random.randint(0, 2**16 - 1)
@@ -51,6 +53,16 @@ class SocketRDT_SR:
 
     def _mod_seq(self, num):
         return num % MAX_SEQ_NUM
+
+    def get_adress(self):
+        return self.adress
+    
+    def close_client(self, adress):
+        if adress in self.connections:
+            del self.connections[adress]
+            print(f"[SR.SERVIDOR] Socket cliente {adress} cerrado correctamente")
+        else:
+            print(f"[SR.SERVIDOR] Socket cliente {adress} no encontrado")
     
     def accept(self):
         while self.keep_running:
@@ -89,8 +101,7 @@ class SocketRDT_SR:
                 new_socket.stop_events = {} 
                 new_socket.shared_lenghts = {}
 
-                #new_socket.recv_base = pack_ack_syn.get_sequence_number()
-                new_socket.recv_base = self.ack_number
+                new_socket.recv_base = (pack_syn.get_sequence_number() + 1) % MAX_SEQ_NUM
                 new_socket.recv_buffer = {}
                 new_socket.recv_queue = queue.Queue()
 
@@ -127,7 +138,11 @@ class SocketRDT_SR:
             self.next_seq_number = self.send_base
             print(f"[SR_SENDER] FIRST send_base {self.send_base}")
             print(f"[SR_SENDER] FIRST next_seq_number {self.next_seq_number}")
-        
+        if answer_connect is None:
+            print(f"[SR_SENDER] No se recibió respuesta del servidor")
+            self._is_connected = False
+            return False
+        return True
         self.socket.settimeout(None) 
 
     # def connect(self):
@@ -254,6 +269,7 @@ class SocketRDT_SR:
 
 
         if pack.want_ACK_FLAG():
+            print(f"[SR.RECV] Paquete con ACK_FLAG recibido con seq {pack.get_sequence_number()}")
             self.recv_queue.put(pack) 
             return None
 
@@ -315,12 +331,12 @@ class SocketRDT_SR:
         # si me llego un seq_num menor, reenvio el ACK pq quizas el otro no recibio mi ACK anterior
         elif seq_num < self.recv_base:
             # Reenviar ACK
-            print("#######################################################################################################################################################################################################################################################")
+            print
             ack_seq = seq_num + len(data)  # el próximo paquete que esperás
             answer = Package()
             answer.set_ACK(ack_seq)
             answer.set_sequence_number(self.sequence_number % MAX_SEQ_NUM)
-            self.socket.sendto(answer.packaging(), self.adress) #esto es thread safe, no hay problema que todos le hablen a la misma isntancia de socketUDP #esto es thread safe, no hay problema que todos le hablen a la misma isntancia de socketUDP
+            self.socket.sendto(answer.packaging(), self.adress) #esto es thread safe, no hay problema que todos le hablen a la misma isntancia de socketUDP
             print(f"[SR.PROCESS_PACK] Reenviando ACK para seq {ack_seq} (paquete duplicado con seq {seq_num})")
         # ignorar el paquete si esta afuera de la ventana
         else:
@@ -400,7 +416,7 @@ class SocketRDT_SR:
                     print("[SERVER.END CONEXION] Mande package con ACK " + str(ack_fin.get_ACK()))
                 else:
                     self._is_connected = False
-                    raise Exception("[ERROR] ACK inválido en cierre de conexión")
+                    print("[SERVER.END_CONN] ACK inválido en cierre de conexión SEQ: " + str(final_ack.get_sequence_number()) + " ACK: " + str(final_ack.get_ACK()))
             except queue.Empty:
                 retries += 1
                 print("[SR.END_CONN] Timeout esperando el ACK final del FIN, reintentando...... " + str(retries))
