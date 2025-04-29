@@ -1,3 +1,7 @@
+HIGH_VERBOSITY = 1
+NORMAL_VERBOSITY = 0
+LOW_VERBOSITY = -1
+
 class Logger:
 
     def __init__(self, prefix, log_level=0):
