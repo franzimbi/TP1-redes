@@ -350,13 +350,15 @@ class SocketRDT_SR:
             data, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
             final_pack = Package()
             final_pack.decode_to_package(data)
+            print("[close()]---final_pack--- SEQ: ", final_pack.get_sequence_number())
+            print("[close()]---final_pack--- ACK: ", final_pack.get_ACK())
             if final_pack.want_FIN():
                 answer = Package()
                 self.ack_number = (self.ack_number + 1) % MAX_SEQ_NUM  # FIX
                 answer.set_ACK(self.ack_number + 1)
-                print("[close()]---self.sequence_number---", self.sequence_number)
                 answer.set_sequence_number(self.sequence_number % MAX_SEQ_NUM)
-                print("[close()]---ANSWER con seq---", answer.get_sequence_number())
+                print("[close()]---ANSWER al FIN con seq---", answer.get_sequence_number())
+                print("[close()]---ANSWER al FIN con ack---", answer.get_ACK())
                 self.socket.sendto(answer.packaging(), self.adress)
                 self._is_connected = False
                 self.socket.close()
@@ -398,15 +400,15 @@ class SocketRDT_SR:
         # mando el fin ahora
         self._is_connected = True
         retries = 0
+        fin = Package()
+        fin.set_FIN()
+        fin.set_sequence_number(self.sequence_number)
+        self.sequence_number  = (self.sequence_number + 1) % MAX_SEQ_NUM
+        data = fin.packaging()
+
         while self._is_connected and retries < TOTAL_RETRIES:
-            fin = Package()
-            fin.set_FIN()
-            fin.set_sequence_number(self.sequence_number)
-            self.sequence_number  = (self.sequence_number + 1) % MAX_SEQ_NUM
-            data = fin.packaging()
             print("[SERVER.END CONEXION] Envie fin con SEQ NUMBER " + str(self.sequence_number))
             self.socket.sendto(data, self.adress)
-            # espero el ack
             try:
                 #espera de ACK en el buffer personal, no en el socket
                 print("[SR.END_CONN] INTENTO RECIBIR ACK FINAL")
@@ -459,9 +461,10 @@ class SocketRDT_SR:
             self.socket.sendto(data, address)
             try:
                 #data_rcv, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
-                print(f"[SR_SENWAIT] INTENTO RECIBIR ACK")
+                print(f"[SR_SENWAIT] INTENTO RECIBIR EL ACK = " + str((self.sequence_number + 1) % MAX_SEQ_NUM))
                 answer = self.recv_queue.get(timeout=1)  # espera máximo 2 segundos
-                print(f"[SR_SENWAIT] RECIBO ACK")
+                print("[SR_SENWAIT] RECIBO ACK con sequence number " + str(answer.get_sequence_number()))
+                print(f"[SR_SENWAIT] RECIBO ACK con numero " + str(answer.get_ACK()))
                 if answer.get_ACK() == (self.sequence_number + 1) % MAX_SEQ_NUM :
                     print(f"[SR_SENWAIT] Recibi ACK con numero {answer.get_ACK()}")
                     return answer
@@ -479,15 +482,15 @@ class SocketRDT_SR:
         self.socket.settimeout(1.0)
         retries = 0
         while retries < total_retries:
-            print(f"[CLIENT_SEND_AND_WAIT_SYN] INTENTO ENVIAR SYN")
+            print("[CLIENT_SEND_AND_WAIT_SYN] INTENTO ENVIAR SYN CON SEQUENCE_NUM " + str(package.get_sequence_number()))
             self.socket.sendto(data, address)
-            print(f"[CLIENT_SEND_AND_WAIT_SYN] ENVIE EL SYN")
+            print("[CLIENT_SEND_AND_WAIT_SYN] ENVIE EL SYN")
             try:
-                print(f"[CLIENT_SEND_AND_WAIT_SYN] INTENTO RECIBIR ACK")
+                print(f"[CLIENT_SEND_AND_WAIT_SYN] INTENTO RECIBIR ACK " + str((self.sequence_number + 1) % MAX_SEQ_NUM))
                 data_rcv, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
-                print(f"[CLIENT_SEND_AND_WAIT_SYN] RECIBO ACK")
                 answer = Package()
                 answer.decode_to_package(data_rcv)
+                print(f"[CLIENT_SEND_AND_WAIT_SYN] RECIBO EL ACK: " + str(answer.get_ACK()))
                 if answer.get_ACK() == (self.sequence_number + 1) % MAX_SEQ_NUM:
                     self.socket.settimeout(None)
                     return answer
