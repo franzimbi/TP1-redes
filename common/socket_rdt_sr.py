@@ -247,12 +247,8 @@ class SocketRDT_SR:
             print("[SR.RECV] Socket no conectado")
             return None
 
-        # try:
         recived_bytes, sender_adress = self.socket.recvfrom(MAX_PACKAGE_SIZE)
-        # except socket.timeout:
-        #     print("[SR.RECV] Timeout en recv()")
-        #     return None
-
+       
         pack = Package()
         pack.decode_to_package(recived_bytes)
 
@@ -296,7 +292,7 @@ class SocketRDT_SR:
             self.recv_buffer[seq_num] = data
         
             # enviar ACK para el siguiente paquete esperado
-            ack_seq = (self.recv_base + len(data)) % MAX_SEQ_NUM  # el siguiente paquete esperado
+            ack_seq = (seq_num + len(data)) % MAX_SEQ_NUM  # el siguiente paquete esperado
             answer = Package()
             answer.set_ACK(ack_seq)
             answer.set_sequence_number(self.sequence_number %  MAX_SEQ_NUM)
@@ -348,14 +344,17 @@ class SocketRDT_SR:
         ack_answer = self._client_send_and_wait_syn(fin, TOTAL_RETRIES, self.adress)
         if ack_answer is not None:
             print("[close()] espero el FIN del server")
-            data, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
-            final_pack = Package()
-            final_pack.decode_to_package(data)
-            print("[close()]---final_pack--- SEQ: ", final_pack.get_sequence_number())
-            print("[close()]---final_pack--- ACK: ", final_pack.get_ACK())
+            if not ack_answer.want_FIN():
+                data, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
+                final_pack = Package()
+                final_pack.decode_to_package(data)
+            else:
+                final_pack = ack_answer
+            print("[close()]---FIN del server--- SEQ: ", final_pack.get_sequence_number())
+            print("[close()]---FIN del server--- ACK: ", final_pack.get_ACK())
             if final_pack.want_FIN():
                 answer = Package()
-                self.ack_number = (self.ack_number + 1) % MAX_SEQ_NUM  # FIX
+                self.ack_number = (self.ack_number + 1) % MAX_SEQ_NUM
                 answer.set_ACK(self.ack_number + 1)
                 answer.set_sequence_number(self.sequence_number % MAX_SEQ_NUM)
                 print("[close()]---ANSWER al FIN con seq---", answer.get_sequence_number())
@@ -365,27 +364,6 @@ class SocketRDT_SR:
                 self.socket.close()
                 print("[close()] Socket cerrado correctamente")
                 return True
-
-
-    # def __end_connection(self):
-    #     print("[SERVER.END CONEXION] Entre a terminar la conexion")
-    #     ack_fin = Package()
-    #     ack_fin.set_ACK(self.ack_number)
-    #     ack_fin.set_sequence_number(self.sequence_number)
-    #     self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
-    #     data = ack_fin.packaging()
-    #     self.socket.sendto(data, self.adress)
-    #     print("[SERVER.END CONEXION] Mande package con ACK {ack_fin.get_ACK()}")
-    #     # mando el fin ahora
-    #     fin = Package()
-    #     fin.set_FIN()
-    #     fin.set_sequence_number(self.sequence_number)
-    #     self.sequence_number  = (self.sequence_number + 1) % MAX_SEQ_NUM
-    #     data = fin.packaging()
-    #     print("[SERVER.END CONEXION] Envie fin con SEQ NUMBER {self.sequence_number}")
-    #     self.socket.sendto(data, self.adress)
-    #     # espero el ack
-    #     self._handle_timeout()
 
     def __end_connection(self):
         
@@ -428,31 +406,6 @@ class SocketRDT_SR:
                 print("[SR.END_CONN] Timeout esperando el ACK final del FIN, reintentando...... " + str(retries))
         #OJO, ver si aca o en otro lado tengo q cerrar threads q controlan el timeout d paquetes
      
-    
-    # def _handle_timeout(self):
-    #     timeout = 2.0
-    #     start_time = time.time()
-
-    #     while True:
-    #         if time.time() - start_time >= timeout:
-    #             print("[SR.END_CONN] Timeout esperando ACK final del FIN")
-    #             break 
-
-    #         # usamos select para esperar datos sin bloquear el socket global
-    #         ready_to_read, _, _ = select.select([self.socket], [], [], timeout)
-
-    #         if ready_to_read:
-    #             final_pack  = self.recv_queue.get() # ojo que se bloquea si nunca le responden al FIN
-
-    #             if final_pack.get_ACK() == self.sequence_number:
-    #                 print("[SR.END_CONN] ACK final recibido correctamente")
-    #                 print(f"[SR.END_CONN] Conexión cerrada correctamente")
-    #                 break  # Sale del loop si el ACK es el esperado
-    #         else:
-    #             print("[SR.END_CONN] Timeout esperando el ACK final del FIN")
-    #             break  
-
-
 
     def __send_and_wait_syn(self, package, total_retries, address):
         print("[SEND_AND_WAIT_SYN] ")
@@ -493,6 +446,10 @@ class SocketRDT_SR:
                 answer.decode_to_package(data_rcv)
                 print(f"[CLIENT_SEND_AND_WAIT_SYN] RECIBO EL ACK: " + str(answer.get_ACK()))
                 if answer.get_ACK() == (self.sequence_number + 1) % MAX_SEQ_NUM:
+                    self.socket.settimeout(None)
+                    return answer
+                    retries += 1
+                if answer.want_FIN():
                     self.socket.settimeout(None)
                     return answer
             except socket.timeout:
