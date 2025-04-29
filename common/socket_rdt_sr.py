@@ -199,7 +199,7 @@ class SocketRDT_SR:
         pack = Package()
         pack.decode_to_package(recived_bytes)
         pack_ack = pack.get_ack_number()
-        print(f"[SR_SENDER] Llego ACK con sequence number {pack_ack}")
+        print(f"[SR_SENDER] Llego ACK: {pack_ack}")
         if pack_ack in self.thrds:
             print(f"[CLIENTE] Paquete con ack number {pack_ack} dentro de la ventana de recepcion")
             #parar el hilo especifico
@@ -301,7 +301,7 @@ class SocketRDT_SR:
             answer.set_ACK(ack_seq)
             answer.set_sequence_number(self.sequence_number %  MAX_SEQ_NUM)
             self.socket.sendto(answer.packaging(), self.adress) #esto es thread safe, no hay problema que todos le hablen a la misma isntancia de socketUDP
-            print(f"[SR.PROCESS_PACK] Enviado ACK para el paquete con seq {ack_seq}")
+            print(f"[SR.PROCESS_PACK] Enviado ACK {ack_seq}")
 
             # procesar paquetes en orden (si estan disponibles)
             while self.recv_base in self.recv_buffer:
@@ -319,7 +319,8 @@ class SocketRDT_SR:
         # si me llego un seq_num menor, reenvio el ACK pq quizas el otro no recibio mi ACK anterior
         elif seq_num < self.recv_base:
             # Reenviar ACK
-            ack_seq = self.recv_base  # el próximo paquete que esperás
+            print("#######################################################################################################################################################################################################################################################")
+            ack_seq = seq_num + len(data)  # el próximo paquete que esperás
             answer = Package()
             answer.set_ACK(ack_seq)
             answer.set_sequence_number(self.sequence_number % MAX_SEQ_NUM)
