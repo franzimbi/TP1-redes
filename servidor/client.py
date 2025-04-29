@@ -21,11 +21,10 @@ class Client:
         self.protocol = ProtocolServer(self.skt)
         print("[client.py]: protocol server creado")
         while self.is_alive:            
-            data = self.protocol.recv_service_option()
+            data = self.skt.process_package()
             if data is None:
                 print("[client.py] Conexión finalizada.")
                 break
-
 
     def stop(self):
         print("[client.py]: stopping client thread")
