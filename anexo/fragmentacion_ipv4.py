@@ -4,6 +4,7 @@ from mininet.link import TCLink
 from mininet.node import OVSController
 from mininet.log import setLogLevel
 from mininet.cli import CLI
+import subprocess
 
 class LinealTopo(Topo):
     def build(self):
@@ -25,9 +26,15 @@ def run():
 
     h1, h2 = net.get('h1', 'h2')
 
-    print("[+] Configurando IPs...")
+    print("[+] Asignando IPs IPv4...")
     h1.setIP('10.0.0.1/24')
     h2.setIP('10.0.0.2/24')
+
+    print("[+] Desactivando IPv6 en h1 y h2...")
+    for h in [h1, h2]:
+        h.cmd('sysctl -w net.ipv6.conf.all.disable_ipv6=1')
+        h.cmd('sysctl -w net.ipv6.conf.default.disable_ipv6=1')
+
 
     print("[+] Bajando MTU de s2-eth2 a 500 bytes...")
     s2 = net.get('s2')
@@ -39,6 +46,9 @@ def run():
 
     print("[+] Iniciando tcpdump en h2...")
     h2.cmd('tcpdump -i h2-eth0 -w captura_h2.pcap &')
+
+    subprocess.Popen(['wireshark'])
+    input("Wireshark abierto. Elegí la interfaz (ej: h2-eth0) y empezá a capturar. Presioná Enter para continuar...")
 
     print("[+] Iniciando servidor UDP en h2 con iperf...")
     h2.cmd('iperf -s -u > iperf_server.txt &')
