@@ -53,6 +53,7 @@ class SocketRDT_SW:
         print("[CLIENT] Enviando SYN")
         client_syn_pack = Package()
         client_syn_pack.set_SYN()
+        client_syn_pack.set_sequence_number(self.sequence_number)
         self.socket.sendto(client_syn_pack.packaging(), adress)
         data, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
         server_syn_ack = Package()
@@ -83,7 +84,7 @@ class SocketRDT_SW:
 
                 ack_pack = Package()
                 ack_pack.set_ACK_FLAG()
-                ack_pack.set_ack_number(self.ack_number)
+                ack_pack.set_sequence_number(self.ack_number)
                 self.socket.sendto(ack_pack.packaging(), address)
                 return data
             else:
@@ -91,11 +92,12 @@ class SocketRDT_SW:
                 print(f"[RECV] Secuencia inesperada: {seq_num}, esperaba: {self.ack_number}. Reenviando ACK.")
                 ack_pack = Package()
                 ack_pack.set_ACK_FLAG()
-                ack_pack.set_ack_number(self.ack_number)
+                ack_pack.set_sequence_number(self.ack_number)
                 self.socket.sendto(ack_pack.packaging(), address)
 
     
     def sendall(self, data):
+        print(f"[SEND] Enviando {len(data)} bytes")
         chunks = [data[i:i + MAX_DATA_SIZE] for i in range(0, len(data), MAX_DATA_SIZE)]
 
         for chunk in chunks:
