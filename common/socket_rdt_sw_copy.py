@@ -14,18 +14,23 @@ MAX_SEQ_NUM = 2**16 - 1
 
 class SocketRDT_SW:
     
-    def __init__(self, host, port):
+    def __init__(self):
         self.sequence_number = random.randint(0, MAX_SEQ_NUM - 1)
         self.ack_number = 0
-        self.adress = (host, port)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.clients = {} #diccionario tupla (ip,port),state
         self._is_connected = False
-        
 
-    #Lado Servidor
+    #Para Servidor
+
+    def bind(self, adress):
+        self.socket.bind(adress)
+
+    def listen(self, n_connections):
+        #self.socket.listen(n_connections)
+        print(f"[SERVER] Escuchando")
+        
     def accept(self):
-        self.socket.bind(self.adress)
         print("[SERVER] Esperando SYN...")
         data, client_address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
         packet = Package()
@@ -43,12 +48,12 @@ class SocketRDT_SW:
                 self.clients[client_address] = True
                 print("[SERVER] Conexión establecida")
     
-    #Lado Cliente
-    def connect(self, host, port):
+    #Para Cliente
+    def connect(self, adress):
         print("[CLIENT] Enviando SYN")
         client_syn_pack = Package()
         client_syn_pack.set_SYN()
-        self.socket.sendto(client_syn_pack.packaging(), (host, port))
+        self.socket.sendto(client_syn_pack.packaging(), adress)
         data, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
         server_syn_ack = Package()
         server_syn_ack.decode_to_package(data)
@@ -57,9 +62,12 @@ class SocketRDT_SW:
             print("[CLIENT] Recibido SYN-ACK, enviando ACK")
             client_ack_pack = Package()
             client_ack_pack.set_ACK_FLAG()
-            self.socket.sendto(client_ack_pack.packaging(), self.adress)
+            self.socket.sendto(client_ack_pack.packaging(), adress)
             self._is_connected = True
             print("[CLIENT] Conexión establecida")
+
+    #Para ambos
+    #WIP!
 
     def recv(self, n_bytes):
         while True:
@@ -87,7 +95,7 @@ class SocketRDT_SW:
                 self.socket.sendto(ack_pack.packaging(), address)
 
     
-    def send_all(self, data):
+    def sendall(self, data):
         chunks = [data[i:i + MAX_DATA_SIZE] for i in range(0, len(data), MAX_DATA_SIZE)]
 
         for chunk in chunks:
@@ -118,7 +126,8 @@ class SocketRDT_SW:
                 raise Exception("[SEND] Fallo en el envío, se agotaron los reintentos")
             
     
-    
+    def close(self):
+        return True
 
         
 

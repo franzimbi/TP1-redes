@@ -11,7 +11,8 @@ server_connected = threading.Event()
 client_connected = threading.Event()
 
 def run_server():
-    server = SocketRDT_SW(SERVER_HOST, SERVER_PORT)
+    server = SocketRDT_SW()
+    server.bind((SERVER_HOST, SERVER_PORT))
     server.accept()
     connected_clients = [client for client in server.clients.values() if client == True]
     
@@ -21,8 +22,8 @@ def run_server():
 
 def run_client():
     time.sleep(1)  # Esperamos al servidor
-    client = SocketRDT_SW(SERVER_HOST, SERVER_PORT)
-    client.connect(SERVER_HOST, SERVER_PORT)
+    client = SocketRDT_SW()
+    client.connect((SERVER_HOST, SERVER_PORT))
     if client._is_connected:
         client_connected.set()
 
