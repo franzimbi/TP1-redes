@@ -1,74 +1,95 @@
-from mininet.net import Mininet
+#!/usr/bin/env python3
+from mininet.node import Node
 from mininet.topo import Topo
-from mininet.link import TCLink
-from mininet.node import OVSController
-from mininet.log import setLogLevel
-from mininet.cli import CLI
-import subprocess
 
-class LinealTopo(Topo):
-    def build(self):
-        h1 = self.addHost('h1')
-        h2 = self.addHost('h2')
-        s1 = self.addSwitch('s1')
-        s2 = self.addSwitch('s2')
-        s3 = self.addSwitch('s3')
+DEFAULT_CLIENT_NUMBER = 1
+DO_NOT_MODIFY_MTU = -1
+DEFAULT_GATEWAY_CLIENTS_SIDE = "10.0.1.254"
+DEFAULT_GATEWAY_SERVER_SIDE = "10.0.0.254"
 
-        self.addLink(h1, s1)
+
+class Router(Node):
+    def config(self, **params):
+        super(Router, self).config(**params)
+
+        self.cmd("sysctl -w net.ipv4.ip_forward=1")
+        self.cmd(f"ifconfig {self.name}-eth0 {DEFAULT_GATEWAY_SERVER_SIDE}/24")
+        self.cmd(f"ifconfig {self.name}-eth1 {DEFAULT_GATEWAY_CLIENTS_SIDE}/24")
+
+        if params.get("mtu", DO_NOT_MODIFY_MTU) != DO_NOT_MODIFY_MTU:
+            self.cmd(f"ifconfig {self.name}-eth0 mtu {params.get('mtu')}")
+
+        # allow all ICMP messages
+        self.cmd("iptables -A INPUT -p icmp -j ACCEPT")
+        self.cmd("iptables -A OUTPUT -p icmp -j ACCEPT")
+        self.cmd("iptables -A FORWARD -p icmp -j ACCEPT")
+        self.cmd(
+            "iptables -I OUTPUT -p icmp --icmp-type fragmentation-needed -j ACCEPT"
+        )
+
+    def terminate(self):
+        self.cmd("sysctl -w net.ipv4.ip_forward=0")
+        super(Router, self).terminate()
+
+
+class Host(Node):
+    def config(self, **params):
+        super(Host, self).config(**params)
+
+        # Disable PMTU discovery on hosts to allow fragmentation
+        self.cmd("sysctl -w net.ipv4.ip_no_pmtu_disc=1")
+        self.cmd("ip route flush cache")
+
+    def terminate(self):
+        super(Host, self).terminate()
+
+
+class LinearEndsTopo(Topo):
+    def build(
+        self,
+        client_number=DEFAULT_CLIENT_NUMBER,
+        mtu=DO_NOT_MODIFY_MTU,
+    ):
+        # add switches & router
+        s1 = self.addSwitch("s1")
+        s2 = self.addNode(
+            "s2",
+            ip=f"{DEFAULT_GATEWAY_SERVER_SIDE}/24",
+            cls=Router,
+            client_number=client_number,
+            mtu=mtu,
+        )
+        s3 = self.addSwitch("s3")
+
+        # set links between switches & router
         self.addLink(s1, s2)
         self.addLink(s2, s3)
-        self.addLink(s3, h2)
 
-def run():
-    topo = LinealTopo()
-    net = Mininet(topo=topo, controller=OVSController, link=TCLink)
-    net.start()
+        h1_server = self.addHost(
+            "h1",
+            ip="10.0.0.1/24",
+            defaultRoute=f"via {DEFAULT_GATEWAY_SERVER_SIDE}",
+            cls=Host,
+        )
 
-    h1, h2 = net.get('h1', 'h2')
+        # set link server-s1
+        self.addLink(h1_server, s1)
 
-    print("[+] Asignando IPs IPv4...")
-    h1.setIP('10.0.0.1/24')
-    h2.setIP('10.0.0.2/24')
+        # set links for each client and the s3
+        # 1 is added because the server is taken into account
+        for i in range(1, client_number + 1):
+            host_client_i = self.addHost(
+                f"h{i + 1}",
+                ip=f"10.0.1.{i}/24",
+                defaultRoute=f"via {DEFAULT_GATEWAY_CLIENTS_SIDE}",  # router's eth1 interface
+                cls=Host,
+            )
+            self.addLink(host_client_i, s3)
 
-    print("[+] Desactivando IPv6 en h1 y h2...")
-    for h in [h1, h2]:
-        h.cmd('sysctl -w net.ipv6.conf.all.disable_ipv6=1')
-        h.cmd('sysctl -w net.ipv6.conf.default.disable_ipv6=1')
 
-
-    print("[+] Bajando MTU de s2-eth2 a 500 bytes...")
-    s2 = net.get('s2')
-    s2.cmd('ifconfig s2-eth2 mtu 500')
-
-    print("[+] Configurando pérdida del 10% en s3-eth2...")
-    s3 = net.get('s3')
-    s3.cmd('tc qdisc add dev s3-eth2 root netem loss 10%')
-
-    print("[+] Iniciando tcpdump en h2...")
-    h2.cmd('tcpdump -i h2-eth0 -w captura_h2.pcap &')
-
-    subprocess.Popen(['wireshark'])
-    input("Wireshark abierto. Elegí la interfaz (ej: h2-eth0) y empezá a capturar. Presioná Enter para continuar...")
-
-    print("[+] Iniciando servidor UDP en h2 con iperf...")
-    h2.cmd('iperf -s -u > iperf_server.txt &')
-
-    print("[+] Ejecutando cliente UDP en h1 (paquetes de 1400 bytes)...")
-    h1.cmd('iperf -c 10.0.0.2 -u -l 1400 -t 10 > iperf_client.txt')
-
-    print("[+] Esperando a que termine la captura...")
-    h2.cmd('sleep 2')
-    h2.cmd('pkill tcpdump')
-    h2.cmd('pkill iperf')
-
-    print("[+] Archivos generados:")
-    print(" - iperf_client.txt")
-    print(" - iperf_server.txt")
-    print(" - captura_h2.pcap")
-
-    CLI(net)
-    net.stop()
-
-if __name__ == '__main__':
-    setLogLevel('info')
-    run()
+topos = {
+    "linends": (
+        lambda client_number=DEFAULT_CLIENT_NUMBER,
+        mtu=DO_NOT_MODIFY_MTU: LinearEndsTopo(client_number, mtu)
+    )
+}
