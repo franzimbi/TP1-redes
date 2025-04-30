@@ -23,54 +23,102 @@ class SocketRDT_SW:
         self._is_connected = False
         
 
-        #Lado Servidor
-        def accept(self):
-            self.socket.bind(self.adress)
-            print("[SERVER] Esperando SYN...")
-            data, client_address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
-            packet = Package()
-            packet.decode_to_package(data)
+    #Lado Servidor
+    def accept(self):
+        self.socket.bind(self.adress)
+        print("[SERVER] Esperando SYN...")
+        data, client_address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
+        packet = Package()
+        packet.decode_to_package(data)
+        if packet.want_SYN():
+            self.ack_number = (int(packet.get_sequence_number()) + 1) % MAX_SEQ_NUM
+            print("[SERVER] Recibido SYN, enviando SYN-ACK")
+            server_syn_pack = Package()
+            server_syn_pack.set_SYN()
+            self.socket.sendto(server_syn_pack.packaging(), client_address)
+            ack_data, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
+            client_ack_pack = Package()
+            client_ack_pack.decode_to_package(ack_data)
+            if client_ack_pack.want_ACK_FLAG():
+                self.clients[client_address] = True
+                print("[SERVER] Conexión establecida")
+    
+    #Lado Cliente
+    def connect(self, host, port):
+        print("[CLIENT] Enviando SYN")
+        client_syn_pack = Package()
+        client_syn_pack.set_SYN()
+        self.socket.sendto(client_syn_pack.packaging(), (host, port))
+        data, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
+        server_syn_ack = Package()
+        server_syn_ack.decode_to_package(data)
+        if server_syn_ack.want_SYN():
+            self.ack_number = (int(server_syn_ack.get_sequence_number()) + 1) % MAX_SEQ_NUM
+            print("[CLIENT] Recibido SYN-ACK, enviando ACK")
+            client_ack_pack = Package()
+            client_ack_pack.set_ACK_FLAG()
+            self.socket.sendto(client_ack_pack.packaging(), self.adress)
+            self._is_connected = True
+            print("[CLIENT] Conexión establecida")
 
-            if packet.want_SYN():
-                self.ack_number = (int(packet.get_sequence_number()) + 1) % MAX_SEQ_NUM
-                print("[SERVER] Recibido SYN, enviando SYN-ACK")
-                server_syn_pack = Package()
-                server_syn_pack.set_SYN()
-                self.socket.sendto(server_syn_pack.packaging(), client_address)
+    def recv(self, n_bytes):
+        while True:
+            received_bytes, address = self.socket.recvfrom(n_bytes)
+            pack = Package()
+            pack.decode_to_package(received_bytes)
+            seq_num = pack.get_sequence_number()
 
-                ack_data, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
-                client_ack_pack = Package()
-                client_ack_pack.decode_to_package(ack_data)
-                if client_ack_pack.want_ACK_FLAG():
-                    self.clients[client_address] = True
-                    print("[SERVER] Conexión establecida")
-        
-        #Lado Cliente
-        def connect(self, host, port):
-            print("[CLIENT] Enviando SYN")
-            client_syn_pack = Package()
-            client_syn_pack.set_SYN()
-            self.socket.sendto(client_syn_pack.packaging(), (host, port))
+            if seq_num == self.ack_number:
+                # Paquete válido y esperado
+                data = pack.get_data()
+                self.ack_number = (self.ack_number + 1) % MAX_SEQ_NUM
 
-            data, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
-            server_syn_ack = Package()
-            server_syn_ack.decode_to_package(data)
+                ack_pack = Package()
+                ack_pack.set_ACK_FLAG()
+                ack_pack.set_ack_number(self.ack_number)
+                self.socket.sendto(ack_pack.packaging(), address)
+                return data
+            else:
+                # Paquete duplicado o fuera de orden → reenviamos último ACK
+                print(f"[RECV] Secuencia inesperada: {seq_num}, esperaba: {self.ack_number}. Reenviando ACK.")
+                ack_pack = Package()
+                ack_pack.set_ACK_FLAG()
+                ack_pack.set_ack_number(self.ack_number)
+                self.socket.sendto(ack_pack.packaging(), address)
 
-            if server_syn_ack.want_SYN():
-                self.ack_number = (int(server_syn_ack.get_sequence_number()) + 1) % MAX_SEQ_NUM
-                print("[CLIENT] Recibido SYN-ACK, enviando ACK")
-                client_ack_pack = Package()
-                client_ack_pack.set_ACK_FLAG()
-                self.socket.sendto(client_ack_pack.packaging(), self.adress)
-                self._is_connected = True
-                print("[CLIENT] Conexión establecida")
+    
+    def send_all(self, data):
+        chunks = [data[i:i + MAX_DATA_SIZE] for i in range(0, len(data), MAX_DATA_SIZE)]
 
+        for chunk in chunks:
+            retries = 0
+            ack_received = False
+            while not ack_received and retries < TOTAL_RETRIES:
+                packet = Package()
+                packet.set_data(chunk)
+                packet.set_sequence_number(self.sequence_number)
+                self.socket.sendto(packet.packaging(), self.adress)
 
-        def recv(self, bytes):
+                try:
+                    self.socket.settimeout(1)  # 1 segundo de espera por el ACK
+                    ack_data, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
+                    ack_packet = Package()
+                    ack_packet.decode_to_package(ack_data)
 
-        #def send_all(self, bytes):
-        
-        #def close(self):
+                    if ack_packet.want_ACK_FLAG() and ack_packet.get_ack_number() == (self.sequence_number + 1) % MAX_SEQ_NUM:
+                        ack_received = True
+                        self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
+                    else:
+                        retries += 1
+                except socket.timeout:
+                    print(f"[SEND] Timeout esperando ACK, reintentando ({retries + 1}/{TOTAL_RETRIES})")
+                    retries += 1
+
+            if not ack_received:
+                raise Exception("[SEND] Fallo en el envío, se agotaron los reintentos")
+            
+    
+    
 
         
 
