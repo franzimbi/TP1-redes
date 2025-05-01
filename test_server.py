@@ -1,29 +1,50 @@
 import time
+import threading
 from common.socket_rdt_sw_copy import SocketRDT_SW
 
-def run_server():
-    rdt = SocketRDT_SW()
-    rdt.bind(('localhost', 12345))
-    rdt.accept()
+# Contador global de conexiones
+connection_counter = 0
+connection_lock = threading.Lock()
 
-    print("[SERVER] Esperando archivo...")
+def handle_client(skt, client_address, thread_id):
+    print(f"[THREAD-{thread_id}] Esperando archivo de {client_address}...")
 
     file_data = b''
     while True:
         try:
-            data = rdt.recv(1035)
+            data = skt.recv(1035)
             if data == b'__END__':
                 break
             file_data += data
         except Exception as e:
-            print(f"[SERVER] Error al recibir: {e}")
+            print(f"[THREAD-{thread_id}] Error al recibir: {e}")
             break
 
-    with open("archivo_recibido.txt", "wb") as f:
+    filename = f"archivo_recibido_{thread_id}.jpg"
+    with open(filename, "wb") as f:
         f.write(file_data)
 
-    print("[SERVER] Archivo recibido y guardado.")
-    rdt.close()
+    print(f"[THREAD-{thread_id}] Archivo recibido y guardado en {filename}")
+    skt.close()
+
+def run_server():
+    global connection_counter
+    rdt = SocketRDT_SW()
+    rdt.bind(('localhost', 12345))
+    rdt.listen(5)
+
+    print("[SERVER] Esperando conexiones...")
+
+    while True:
+        skt, address = rdt.accept()
+
+        # Asignar ID de thread único
+        with connection_lock:
+            connection_counter += 1
+            thread_id = connection_counter
+
+        client_thread = threading.Thread(target=handle_client, args=(skt, address, thread_id))
+        client_thread.start()
 
 if __name__ == "__main__":
     run_server()
