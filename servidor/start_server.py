@@ -6,6 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from common.logger import *
 from protocol_server import ProtocolServer
 import argparse
+from common.socket_rdt_sw_copy import SocketRDT_SW
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -50,13 +51,18 @@ if args.verbose > 0:
     logger.set_log_level(HIGH_VERBOSITY)
 if args.quiet:
     logger.set_log_level(LOW_VERBOSITY)
-skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+skt = SocketRDT_SW()
 logger.log(f"Arrancando server en: ({args.host}:{args.port})", HIGH_VERBOSITY)
 skt.bind((args.host, args.port))
 skt.listen(5)
 
 while True:
-    conn, addr = skt.accept()
-    logger.log(f"conexion aceptada de {addr}", HIGH_VERBOSITY)
-    thread = threading.Thread(target=handle_client, args=(conn, addr, args, logger))
-    thread.start()
+    try:
+        conn, addr = skt.accept()
+        logger.log(f"conexion aceptada de {addr}", HIGH_VERBOSITY)
+        thread = threading.Thread(target=handle_client, args=(conn, addr, args, logger))
+        thread.start()
+    except Exception as e:
+        skt.close()
+        break

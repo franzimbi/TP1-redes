@@ -36,7 +36,7 @@ class ProtocolClient:
         size_file = os.path.getsize(file_complete)
         self.logger.log(f"[PROTOCOL_CLIENT] archivo {file_complete} tiene tamanio {size_file}", HIGH_VERBOSITY)
         size_file = size_file.to_bytes(32, byteorder='big')
-        self.connection.send(size_file)
+        self.connection.sendall(size_file)
 
         # mando el archivo
         with open(file_complete, 'rb') as f:

@@ -5,6 +5,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from common.logger import *
 import argparse
+from common.socket_rdt_sw_copy import SocketRDT_SW
 
 def parse_args():
     parser = argparse.ArgumentParser(
