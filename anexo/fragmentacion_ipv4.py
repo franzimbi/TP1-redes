@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from mininet.node import Node
 from mininet.topo import Topo
+from mininet.link import TCLink
 
 DEFAULT_CLIENT_NUMBER = 1
 DO_NOT_MODIFY_MTU = -1
@@ -18,6 +19,7 @@ class Router(Node):
 
         if params.get("mtu", DO_NOT_MODIFY_MTU) != DO_NOT_MODIFY_MTU:
             self.cmd(f"ifconfig {self.name}-eth0 mtu {params.get('mtu')}")
+            print(f"ifconfig {self.name}-eth0 mtu {params.get('mtu')}")
 
         # allow all ICMP messages
         self.cmd("iptables -A INPUT -p icmp -j ACCEPT")
@@ -40,6 +42,14 @@ class Host(Node):
         self.cmd("sysctl -w net.ipv4.ip_no_pmtu_disc=1")
         self.cmd("ip route flush cache")
 
+        # Configurar pérdida si se especifica
+        if "loss" in params and params["loss"] > 0:
+            # Detectar la interfaz conectada al host (asumimos eth0)
+            loss_pct = params["loss"]
+            self.cmd(
+                f"tc qdisc add dev {self.name}-eth0 root netem loss {loss_pct}%"
+            )
+
     def terminate(self):
         super(Host, self).terminate()
 
@@ -49,6 +59,7 @@ class LinearEndsTopo(Topo):
         self,
         client_number=DEFAULT_CLIENT_NUMBER,
         mtu=DO_NOT_MODIFY_MTU,
+        loss=0,
     ):
         # add switches & router
         s1 = self.addSwitch("s1")
@@ -84,12 +95,16 @@ class LinearEndsTopo(Topo):
                 defaultRoute=f"via {DEFAULT_GATEWAY_CLIENTS_SIDE}",  # router's eth1 interface
                 cls=Host,
             )
-            self.addLink(host_client_i, s3)
+            if i == 1:
+                self.addLink(host_client_i, s3, cls=TCLink, loss=loss)
+            else:
+                self.addLink(host_client_i, s3)
 
 
 topos = {
     "linends": (
         lambda client_number=DEFAULT_CLIENT_NUMBER,
-        mtu=DO_NOT_MODIFY_MTU: LinearEndsTopo(client_number, mtu)
+        mtu=DO_NOT_MODIFY_MTU,
+        loss=0: LinearEndsTopo(client_number, mtu, loss)
     )
 }
