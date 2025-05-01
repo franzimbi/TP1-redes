@@ -30,13 +30,17 @@ def handle_client(skt, client_address, thread_id):
 def run_server():
     global connection_counter
     rdt = SocketRDT_SW()
-    rdt.bind(('localhost', 12345))
+    rdt.bind(('10.0.0.2', 12345))
     rdt.listen(5)
 
     print("[SERVER] Esperando conexiones...")
 
     while True:
         skt, address = rdt.accept()
+
+        if skt is None:
+            print("[SERVER] Error al aceptar conexión.")
+            continue
 
         # Asignar ID de thread único
         with connection_lock:
