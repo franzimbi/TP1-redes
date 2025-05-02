@@ -56,6 +56,7 @@ class SocketRDT_SW:
             server_syn_pack = Package()
             server_syn_pack.set_SYN()
             server_syn_pack.set_data(new_port.to_bytes(2, byteorder='big'))
+            server_syn_pack.set_sequence_number(self.sequence_number)
             
             client_ack_pack = Package()
             
@@ -87,6 +88,7 @@ class SocketRDT_SW:
         new_socket.bind((self.socket.getsockname()[0], 0))
         new_socket._connect_to_peer(client_address)
         new_socket.ack_number = seq_num
+        new_socket.sequence_number = self.sequence_number
         return new_socket, new_socket.socket.getsockname()[1]
 
     def _connect_to_peer(self, client_address):
@@ -119,6 +121,7 @@ class SocketRDT_SW:
             
         if server_syn_ack.want_SYN():
             self.ack_number = (server_syn_ack.get_sequence_number() + 1) % MAX_SEQ_NUM
+            print(f"[CLIENT] Recibido SYN-ACK, enviando ACK {self.ack_number}")
             print("[CLIENT] Recibido SYN-ACK, enviando ACK")
             client_ack_pack = Package()
             client_ack_pack.set_ACK_FLAG()
@@ -128,6 +131,7 @@ class SocketRDT_SW:
             print("[CLIENT] Conexión establecida")
 
     def recv(self, n_bytes):
+        self.socket.settimeout(None)
         while True:
             received_bytes, address = self.socket.recvfrom(n_bytes+HEADER_SIZE)
             pack = Package()
