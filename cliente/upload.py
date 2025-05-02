@@ -7,6 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from common.logger import *
 import argparse
 from common.socket_rdt_sw_copy import SocketRDT_SW
+from common.socket_rdt_sr import SocketRDT_SR
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -35,8 +36,20 @@ if args.quiet:
 
 #skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 start = time.time()
-skt = SocketRDT_SW()
-skt.connect((args.host, args.port))
+skt = None
+if args.protocol == "sr":
+    skt = SocketRDT_SR(args.host, args.port)
+
+elif args.protocol == "sw":
+    skt = SocketRDT_SW()
+else:
+    skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+if args.protocol == "sr":
+    skt.connect()
+else:
+    skt.connect((args.host, args.port))
+
 logger.log(f"Arrancando cliente en: ({args.host}:{args.port})", HIGH_VERBOSITY)
 
 protocol = ProtocolClient('U', skt, logger)

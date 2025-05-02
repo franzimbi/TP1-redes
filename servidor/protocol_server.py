@@ -55,7 +55,7 @@ class ProtocolServer:
         size_file = os.path.getsize(file)
         self.logger.log(f"[server_protocol]: el archivo {file} tiene tamanio {size_file}", HIGH_VERBOSITY)
         size_file = size_file.to_bytes(32, byteorder='big')
-        self.socket.send(size_file)
+        self.socket.sendall(size_file)
         # mando el archivo
         self.logger.log(f"[server_protocol]: enviando el archivo {file}", NORMAL_VERBOSITY)
         with open(file, 'rb') as f:

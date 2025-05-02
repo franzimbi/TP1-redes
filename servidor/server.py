@@ -13,7 +13,7 @@ BUFFER = 1024
 # __MAIN__
 def recv_loop(socket_principal):
     while True:
-        socket_principal.recv()
+        socket_principal.recv_all()
 
 def main():
     skt = SocketRDT_SR("10.0.0.2", 8082)

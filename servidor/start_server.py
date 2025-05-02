@@ -7,6 +7,7 @@ from common.logger import *
 from protocol_server import ProtocolServer
 import argparse
 from common.socket_rdt_sw_copy import SocketRDT_SW
+from common.socket_rdt_sr import SocketRDT_SR
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -25,6 +26,10 @@ def parse_args():
 
 BUFFER = 1024
 shutdown_event = threading.Event()
+
+def recv_loop(socket_principal):
+    while True:########################################
+        socket_principal.recv_all()
 
 def handle_client(conn, addr, args, logger):
     proto = ProtocolServer(conn, logger)
@@ -51,18 +56,36 @@ if args.verbose > 0:
     logger.set_log_level(HIGH_VERBOSITY)
 if args.quiet:
     logger.set_log_level(LOW_VERBOSITY)
-#skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-skt = SocketRDT_SW()
+skt = None
+if args.protocol == "sr":
+    skt = SocketRDT_SR(args.host, args.port)
+
+elif args.protocol == "sw":
+    skt = SocketRDT_SW()
+else:
+    skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
 logger.log(f"Arrancando server en: ({args.host}:{args.port})", HIGH_VERBOSITY)
-skt.bind((args.host, args.port))
+if args.protocol == "sr":
+    skt.bind()
+else:
+    skt.bind((args.host, args.port))
+
 skt.listen(5)
+
+if args.protocol == "sr":
+    recv_thread = threading.Thread(target=recv_loop, args=(skt,))
+    recv_thread.daemon = True
+    recv_thread.start()
 
 while True:
     try:
         conn, addr = skt.accept()
         logger.log(f"conexion aceptada de {addr}", HIGH_VERBOSITY)
         thread = threading.Thread(target=handle_client, args=(conn, addr, args, logger))
+        thread.daemon = True
         thread.start()
     except Exception as e:
         skt.close()
+        recv_thread.join() 
         break
