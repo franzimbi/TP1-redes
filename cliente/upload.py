@@ -18,7 +18,7 @@ def parse_args():
     group.add_argument("-v", "--verbose", action="count", default=NORMAL_VERBOSITY, help="full output verbosity")
     group.add_argument("-q", "--quiet", action="store_true", help="no verbosity")
     
-    parser.add_argument('-H', '--host', type=str, default="localhost", help='service IP address')
+    parser.add_argument('-H', '--host', type=str, default="127.0.0.1", help='service IP address')
     parser.add_argument('-p', '--port', type=int, default=8080, help='service port')
     parser.add_argument('-s', '--source', type=str, default="/", help='source file path')
     parser.add_argument('-n', '--name', type=str, default="/", help='file name')

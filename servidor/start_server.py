@@ -17,7 +17,7 @@ def parse_args():
     group.add_argument("-v", "--verbose", action="count", default=NORMAL_VERBOSITY, help="full output verbosity")
     group.add_argument("-q", "--quiet", action="store_true", help="no verbosity")
     
-    parser.add_argument('-H', '--host', type=str, default="localhost", help='service IP address')
+    parser.add_argument('-H', '--host', type=str, default="127.0.0.1", help='service IP address')
     parser.add_argument('-p', '--port', type=int, default=8080, help='service port')
     parser.add_argument('-s', '--storage', type=str, default="/", help='storage dir path')
     parser.add_argument('-r', '--protocol', type=str, choices=["sw", "sr"], default="", help='error recovery protocol')
@@ -84,7 +84,6 @@ while True:
         conn, addr = skt.accept()
         logger.log(f"conexion aceptada de {addr}", HIGH_VERBOSITY)
         thread = threading.Thread(target=handle_client, args=(conn, addr, args, logger))
-        thread.daemon = True
         thread.start()
     except Exception as e:
         break
@@ -93,3 +92,4 @@ if args.protocol == "sr":
     recv_thread.join()
 else:
     skt.close()
+    thread.join()

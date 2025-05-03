@@ -18,7 +18,7 @@ def parse_args():
     group.add_argument("-v", "--verbose", action="count", default=NORMAL_VERBOSITY, help="full output verbosity")
     group.add_argument("-q", "--quiet", action="store_true", help="no verbosity")
     
-    parser.add_argument("-H", "--host", type=str, default="localhost", help="server IP address")
+    parser.add_argument("-H", "--host", type=str, default="127.0.0.1", help="server IP address")
     parser.add_argument("-p", "--port", type=int, default=8080, help="server port")
     parser.add_argument("-d", "--dst", type=str, required=True, help="destination file path")
     parser.add_argument("-n", "--name", type=str, required=True, help="file name")
@@ -41,6 +41,8 @@ if args.quiet:
 
 skt = None
 if args.protocol == "sr":
+    print("host es: ", args.host)
+    print("port es: ", args.port)
     skt = SocketRDT_SR(args.host, args.port)
 
 elif args.protocol == "sw":
@@ -70,6 +72,6 @@ if args.protocol == "sr":
     recv_thread.join()
     print ("hice join de recv_thread")
 
-logger.log("Fin del cliente upload", NORMAL_VERBOSITY)
+logger.log("Fin del cliente download", NORMAL_VERBOSITY)
 end = time.time()
 print(f"La función tardó {end - start:.4f} segundos")
