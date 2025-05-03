@@ -47,7 +47,7 @@ def handle_client(conn, addr, args, logger):
     except Exception as e:
         logger.log(f"[{addr}] Error: {e}", NORMAL_VERBOSITY)
     finally:
-        conn.close()
+        #conn.close()
         logger.log(f"[{addr}] Conexion cerrada", HIGH_VERBOSITY)
 
 # __MAIN__

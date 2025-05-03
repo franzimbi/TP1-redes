@@ -28,7 +28,7 @@ class ProtocolClient:
         # mando name
         self.connection.sendall(len(file).to_bytes(32, byteorder='big'))
         self.connection.sendall(file.encode('utf-8'))
-        self.logger.log(f"[PROTOCOL_CLIENT] mando nombre {file}", HIGH_VERBOSITY)
+        self.logger.log(f"[PROTOCOL_CLIENT] mande nombre {file}", HIGH_VERBOSITY)
         # mando size del archivo
         file_complete = os.path.join(path, file)
         if not os.path.isfile(file_complete):

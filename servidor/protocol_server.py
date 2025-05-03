@@ -19,7 +19,7 @@ class ProtocolServer:
         name_size = self.socket.recv(32)
         name_size = int.from_bytes(name_size, byteorder='big')
         name = self.socket.recv(name_size).decode('utf-8')
-        self.logger.log(f"[server_protocol]: recibiendo nombre de archivo {name}", HIGH_VERBOSITY)
+        self.logger.log(f"[server_protocol]: recibi nombre de archivo {name}", HIGH_VERBOSITY)
         # recibo el tamanio del archivo
         data_bytes = self.socket.recv(32)
         size_file = int.from_bytes(data_bytes, byteorder='big')

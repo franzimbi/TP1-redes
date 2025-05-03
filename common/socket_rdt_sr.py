@@ -42,7 +42,7 @@ class SocketRDT_SR:
         self.connections = {}    # diccionario de conexiones activas
         self.recv_queue = queue.Queue() #queue con get() bloqueante para que el hilo no sea un busyloop
         self.SYN_queue = queue.Queue() 
-        self.ack_queue = queue.Queue()
+        self.acks_queue = queue.Queue()
 
         self.keep_running = True
         self.process_pack_thread = None #se asigna desp
@@ -152,7 +152,7 @@ class SocketRDT_SR:
                 new_socket.recv_base = (pack_syn.get_sequence_number() + 1) % MAX_SEQ_NUM
                 new_socket.recv_buffer = {}
                 new_socket.recv_queue = queue.Queue()
-                new_socket.ack_queue = queue.Queue()
+                new_socket.acks_queue = queue.Queue()
                 new_socket.process_pack_thread = threading.Thread(target=new_socket.process_package)
                 new_socket.process_pack_thread.daemon = True
                 new_socket.process_pack_thread.start()
@@ -260,7 +260,7 @@ class SocketRDT_SR:
 
     def _check_ACKs(self):
         print(f"[check_ACKs] Revisando ACKs")
-        pack = self.recv_queue.get()
+        pack = self.acks_queue.get()
         pack_ack = pack.get_ack_number()
         print(f"[check_ACKs] Llego ACK: {pack_ack}")
         if pack_ack in self.thrds:
@@ -304,7 +304,7 @@ class SocketRDT_SR:
         print(f"[SR_SENDER] thrd con seq {pack.get_sequence_number()} terminado")
 
     def _retransmit(self, paquete):
-        # Reenviar el paquete
+        # reenviar el paquete
         self.socket.sendto(paquete.packaging(), self.adress)
         print(f"[SR_SENDER] Reenviado paquete con seq {paquete.get_sequence_number()}")
     
@@ -326,13 +326,13 @@ class SocketRDT_SR:
 
         if pack.want_ACK_FLAG():
             print(f"[SR.RECV] Paquete con ACK_FLAG recibido con seq {pack.get_sequence_number()}")
-            self.recv_queue.put(pack) 
+            self.acks_queue.put(pack) 
             return None
 
         if sender_adress in self.connections:
             print("[SR.RECV] Es un paquete normal")        
             self.connections[sender_adress].recv_queue.put(pack)
-            return None 
+            return None
 
         if pack.want_SYN():
             self.SYN_queue.put((recived_bytes, sender_adress))    
@@ -342,7 +342,7 @@ class SocketRDT_SR:
 
     def process_package(self):
 
-        while True:
+        while self._is_connected:
             try:
                 pack = self.recv_queue.get(timeout=2)  # espera 2 segundos
                 print("[SR.PROCESS_PACK] saque algo de la cola")
@@ -355,7 +355,6 @@ class SocketRDT_SR:
             # verificar si el paquete es FIN
             if pack.want_FIN():
                 print(f"[SR.PROCESS_PACK] Paquete FIN recibido con seq {seq_num}")
-                self._is_connected = False
                 self.ack_number = (pack.get_sequence_number() + 1)  % MAX_SEQ_NUM
                 self.__end_connection()
                 return None
@@ -414,7 +413,6 @@ class SocketRDT_SR:
         result = bytearray()
         print(f"[SR.RECV de fran] Recibiendo {n_bytes} bytes")
         for _ in range(n_bytes):
-            #print("[SR.RECV_n_bytes] esperando un byte")
             byte = self.data_queue.get()  # bloquea hasta que haya un byte
             result.append(byte)
         return bytes(result)
@@ -432,7 +430,7 @@ class SocketRDT_SR:
         #vaciar recv_queue de ACKs redundantes
         while True:
             try:
-                self.recv_queue.get_nowait()
+                self.acks_queue.get_nowait()
             except queue.Empty:
                 break
 
@@ -446,10 +444,7 @@ class SocketRDT_SR:
         if ack_answer is not None:
             print("[close()] espero el FIN del server")
             if not ack_answer.want_FIN():
-                #data, address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
-                # final_pack = Package()
-                # final_pack.decode_to_package(data)
-                final_pack = self.recv_queue.get()
+                final_pack = self.acks_queue.get()
             else:
                 final_pack = ack_answer
             if final_pack.want_FIN():
@@ -496,7 +491,7 @@ class SocketRDT_SR:
             try:
                 #espera de ACK en el buffer personal, no en el socket
                 print("[SR.END_CONN] INTENTO RECIBIR ACK FINAL")
-                final_ack = self.recv_queue.get(timeout=1)  # bloqueante con timeout
+                final_ack = self.acks_queue.get(timeout=1)  # bloqueante con timeout ojo aca ahora no estaria recibiendo el fin en esta acksqueue
                 if final_ack.get_ACK() == self.sequence_number:
                     self._is_connected = False
                     print(f"[SR.END_CONN] ACK final recibido correctamente")
@@ -522,7 +517,7 @@ class SocketRDT_SR:
             self.socket.sendto(data, address)
             try:
                 print(f"[SR_SENWAIT] INTENTO RECIBIR EL ACK = " + str((self.sequence_number + 1) % MAX_SEQ_NUM))
-                answer = self.recv_queue.get(timeout=1)  # espera máximo 2 segundos
+                answer = self.acks_queue.get(timeout=1)  # espera máximo 2 segundos
                 print("[SR_SENWAIT] RECIBO ACK con sequence number " + str(answer.get_sequence_number()))
                 print(f"[SR_SENWAIT] RECIBO ACK con numero " + str(answer.get_ACK()))
                 if answer.get_ACK() == (self.sequence_number + 1) % MAX_SEQ_NUM :
@@ -547,7 +542,7 @@ class SocketRDT_SR:
             print("[CLIENT_SEND_AND_WAIT_SYN] ENVIE EL SYN")
             try:
                 print(f"[CLIENT_SEND_AND_WAIT_SYN] INTENTO RECIBIR ACK " + str((self.sequence_number + 1) % MAX_SEQ_NUM))
-                answer = self.recv_queue.get(timeout=1)
+                answer = self.acks_queue.get(timeout=1)
                 print(f"[CLIENT_SEND_AND_WAIT_SYN] RECIBO EL ACK: " + str(answer.get_ACK()))
                 if answer.get_ACK() == (self.sequence_number + 1) % MAX_SEQ_NUM:
                     self.socket.settimeout(None)
