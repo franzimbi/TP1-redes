@@ -1,7 +1,7 @@
 import threading
 import time
 
-from common.socket_rdt_sw_copy import SocketRDT_SW
+from common.socket_rdt_sw import SocketRDT_SW
 
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 5005

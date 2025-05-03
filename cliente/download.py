@@ -1,3 +1,4 @@
+import time
 from protocol_client import ProtocolClient
 import socket
 import sys
@@ -5,7 +6,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from common.logger import *
 import argparse
-from common.socket_rdt_sw_copy import SocketRDT_SW
+from common.socket_rdt_sw import SocketRDT_SW
 from common.socket_rdt_sr import SocketRDT_SR
 
 def parse_args():
@@ -20,7 +21,7 @@ def parse_args():
     parser.add_argument("-p", "--port", type=int, default=8080, help="server port")
     parser.add_argument("-d", "--dst", type=str, required=True, help="destination file path")
     parser.add_argument("-n", "--name", type=str, required=True, help="file name")
-    parser.add_argument("-r", "--protocol", type=str, choices=["sw", "sr"], default="sw", help="error recovery protocol")
+    parser.add_argument("-r", "--protocol", type=str, choices=["sw", "sr"], default="", help="error recovery protocol")
 
     return parser.parse_args()
 
@@ -28,6 +29,7 @@ def parse_args():
 #__main__
 args = parse_args()
 logger = Logger("[DOWNLOAD]")
+start = time.time()
 if args.verbose > NORMAL_VERBOSITY:
     logger.set_log_level(HIGH_VERBOSITY)
 if args.quiet:
@@ -54,4 +56,6 @@ protocol.send_start_message()
 protocol.recv_file(args.dst, args.name)
 
 skt.close()
-logger.log(f"Arrancando cliente en: ({args.host}:{args.port})", NORMAL_VERBOSITY)
+logger.log("Fin del cliente upload", NORMAL_VERBOSITY)
+end = time.time()
+print(f"La función tardó {end - start:.4f} segundos")

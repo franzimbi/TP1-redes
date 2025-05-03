@@ -9,7 +9,7 @@ class SimpleTopo(Topo):
     def build(self):
         h1 = self.addHost('h1')
         h2 = self.addHost('h2')
-        self.addLink(h1, h2, cls=TCLink, loss=10)
+        self.addLink(h1, h2, cls=TCLink, loss=0)
 
 def run():
     topo = SimpleTopo()

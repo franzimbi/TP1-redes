@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from common.logger import *
 
@@ -35,16 +36,23 @@ class ProtocolClient:
             return
         size_file = os.path.getsize(file_complete)
         self.logger.log(f"[PROTOCOL_CLIENT] archivo {file_complete} tiene tamanio {size_file}", HIGH_VERBOSITY)
+        size = size_file
         size_file = size_file.to_bytes(32, byteorder='big')
         self.connection.sendall(size_file)
 
         # mando el archivo
         with open(file_complete, 'rb') as f:
             self.logger.log(f"[PROTOCOL_CLIENT] mando archivo", HIGH_VERBOSITY)
-            while True:
+
+            if ((size / 1024) % 2) == 0:
+                size = int(size / 1024) 
+            else:
+                size = int(size / 1024) + 1
+            print(f"enviando archivo {size}")
+            
+            for j in range(size):
+                print(f"enviando chunk {j}")	
                 chunk = f.read(1024)
-                if not chunk:
-                    break
                 self.connection.sendall(chunk)
         # close the file
         f.close()
@@ -66,10 +74,15 @@ class ProtocolClient:
             return
         with open(file_complete, 'wb') as f:
             self.logger.log(f"[PROTOCOL_CLIENT] recibiendo archivo", HIGH_VERBOSITY)
-            for _ in range(int(size_file)):
+            size = 0
+            if (size_file / 1024) % 2 == 0:
+                size = int(size_file / 1024) 
+            else:
+                size = int(size_file / 1024) + 1
+            print(f"enviando archivo {size}")
+            
+            for j in range(size):
                 chunk = self.connection.recv(1024)
-                if not chunk:
-                    break
                 f.write(chunk)
         f.close()
         self.logger.log(f"[PROTOCOL_CLIENT] archivo {file_complete} recibido", HIGH_VERBOSITY)

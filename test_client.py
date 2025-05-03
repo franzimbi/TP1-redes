@@ -1,5 +1,5 @@
 import time
-from common.socket_rdt_sw_copy import SocketRDT_SW
+from common.socket_rdt_sw import SocketRDT_SW
 
 def run_client():
     rdt = SocketRDT_SW()

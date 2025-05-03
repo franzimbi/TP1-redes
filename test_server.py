@@ -1,6 +1,6 @@
 import time
 import threading
-from common.socket_rdt_sw_copy import SocketRDT_SW
+from common.socket_rdt_sw import SocketRDT_SW
 
 # Contador global de conexiones
 connection_counter = 0

@@ -1,6 +1,7 @@
 import socket
 import protocol_server
 import os
+import math
 from common.logger import *
 
 class ProtocolServer:
@@ -32,10 +33,15 @@ class ProtocolServer:
         self.logger.log(f"[server_protocol]: el path al archivo {name}: {size_file} existe", HIGH_VERBOSITY)
         with open(path_complete, 'wb') as f:
             self.logger.log(f"[server_protocol]: creando el archivo {path_complete} y recibiendo", NORMAL_VERBOSITY)
-            for _ in range(int(size_file)):
+            size = 0
+            if ((size_file / 1024) % 2) == 0:
+                size = int(size_file / 1024) 
+            else:
+                size = int(size_file / 1024) + 1
+            print(f"enviando archivo {size}")
+            for j in range(size):
+                print(f"recibiendo chunk {j}")	
                 data = self.socket.recv(1024)
-                if not data:
-                    break
                 f.write(data)
         f.close()
         self.logger.log(f"[server_protocol]: archivo {name} recibido correctamente", NORMAL_VERBOSITY)
@@ -53,16 +59,25 @@ class ProtocolServer:
             return
         # mando size del archivo
         size_file = os.path.getsize(file)
+        size = size_file
         self.logger.log(f"[server_protocol]: el archivo {file} tiene tamanio {size_file}", HIGH_VERBOSITY)
         size_file = size_file.to_bytes(32, byteorder='big')
         self.socket.sendall(size_file)
         # mando el archivo
         self.logger.log(f"[server_protocol]: enviando el archivo {file}", NORMAL_VERBOSITY)
+        
         with open(file, 'rb') as f:
-            while True:
+            self.logger.log(f"[server_protocol] mando archivo", HIGH_VERBOSITY)
+
+            if ((size / 1024) % 2) == 0:
+                size = int(size / 1024) 
+            else:
+                size = int(size / 1024) + 1
+            print(f"enviando archivo {size}")
+            
+            for j in range(size):
+                print(f"enviando chunk {j}")	
                 chunk = f.read(1024)
-                if not chunk:
-                    break
                 self.socket.sendall(chunk)
         f.close()
         self.logger.log(f"[server_protocol]: archivo {file} enviado correctamente", NORMAL_VERBOSITY)
