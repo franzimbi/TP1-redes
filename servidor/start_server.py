@@ -28,7 +28,7 @@ BUFFER = 1024
 shutdown_event = threading.Event()
 
 def recv_loop(socket_principal):
-    while True:########################################
+    while socket_principal.keep_running:
         socket_principal.recv_all()
 
 def handle_client(conn, addr, args, logger):
@@ -40,6 +40,7 @@ def handle_client(conn, addr, args, logger):
             proto.recv_file(args.storage)
         elif option == 'D':
             logger.log(f"[{addr}] Opcion Download detectada", HIGH_VERBOSITY)
+            print(f"[{addr}] Opcion Download detectada")
             proto.send_file(args.storage)
         else:
             logger.log(f"[{addr}] Opcion invalida recibida", NORMAL_VERBOSITY)
@@ -86,6 +87,9 @@ while True:
         thread.daemon = True
         thread.start()
     except Exception as e:
-        skt.close()
-        recv_thread.join() 
         break
+if args.protocol == "sr":
+    skt.keep_running = False
+    recv_thread.join()
+else:
+    skt.close()
