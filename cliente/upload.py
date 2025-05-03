@@ -8,6 +8,7 @@ from common.logger import *
 import argparse
 from common.socket_rdt_sw_copy import SocketRDT_SW
 from common.socket_rdt_sr import SocketRDT_SR
+import threading
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -25,6 +26,13 @@ def parse_args():
 
     return parser.parse_args()
 
+def recv_loop(socket_principal):
+    while socket_principal.keep_running:
+        socket_principal.recv_all()
+
+def check_ACKs_loop(socket_principal):
+    while socket_principal.keep_checking_acks:
+        socket_principal._check_ACKs()
 
 #__main__
 args = parse_args()
@@ -46,7 +54,13 @@ else:
     skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 if args.protocol == "sr":
+    recv_thread = threading.Thread(target=recv_loop, args=(skt,))
+    recv_thread.start()
+
+if args.protocol == "sr":
     skt.connect()
+    ack_thread = threading.Thread(target=check_ACKs_loop, args=(skt,))
+    ack_thread.start()
 else:
     skt.connect((args.host, args.port))
 
@@ -57,7 +71,21 @@ protocol = ProtocolClient('U', skt, logger)
 protocol.send_start_message()
 protocol.send_file(args.source, args.name)
 
-skt.close()
+print("[UPLOAD.PY] hice send fileeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+
+if args.protocol == "sr":
+    skt.shutdown()
+    print ("hice shutdown")
+    ack_thread.join()
+    print ("hice join de ack_thread")
+    skt.close()
+    print ("hice close")
+    skt.keep_running = False
+    recv_thread.join()
+    print ("hice join de recv_thread")
+else:
+    skt.close()
 logger.log("Fin del cliente upload", NORMAL_VERBOSITY)
 end = time.time()
 print(f"La función tardó {end - start:.4f} segundos")
+logger.log("Fin del cliente upload", NORMAL_VERBOSITY)

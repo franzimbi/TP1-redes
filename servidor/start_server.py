@@ -28,7 +28,7 @@ BUFFER = 1024
 shutdown_event = threading.Event()
 
 def recv_loop(socket_principal):
-    while True:########################################
+    while socket_principal.keep_running:
         socket_principal.recv_all()
 
 def handle_client(conn, addr, args, logger):
@@ -75,7 +75,6 @@ skt.listen(5)
 
 if args.protocol == "sr":
     recv_thread = threading.Thread(target=recv_loop, args=(skt,))
-    recv_thread.daemon = True
     recv_thread.start()
 
 while True:
@@ -86,6 +85,10 @@ while True:
         thread.daemon = True
         thread.start()
     except Exception as e:
-        skt.close()
-        recv_thread.join() 
         break
+if args.protocol == "sr":
+    skt.shutdown()
+    skt.keep_running = False
+    recv_thread.join()
+else:
+    skt.close()
