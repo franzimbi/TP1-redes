@@ -1,16 +1,16 @@
+import argparse
 import os
 import socket
 import sys
 import threading
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import argparse
-
-from protocol_server import ProtocolServer
-
-from common.logger import *
-from common.socket_rdt_sr import SocketRDT_SR
-from common.socket_rdt_sw import SocketRDT_SW
+from protocol_server import ProtocolServer  # noqa: E402
+from common.logger import Logger, NORMAL_VERBOSITY  # noqa: E402
+from common.logger import HIGH_VERBOSITY  # noqa: E402
+from common.logger import LOW_VERBOSITY  # noqa: E402
+from common.socket_rdt_sr import SocketRDT_SR  # noqa: E402
+from common.socket_rdt_sw import SocketRDT_SW  # noqa: E402
 
 
 def parse_args():
@@ -92,7 +92,7 @@ if args.quiet:
     logger.set_log_level(LOW_VERBOSITY)
 skt = None
 if args.protocol == "sr":
-    skt = SocketRDT_SR(args.host, args.port)
+    skt = SocketRDT_SR(args.host, args.port, logger)
 
 elif args.protocol == "sw":
     skt = SocketRDT_SW()
@@ -112,6 +112,7 @@ if args.protocol == "sr":
     recv_thread.daemon = True
     recv_thread.start()
 
+threads = []
 while True:
     try:
         conn, addr = skt.accept()
@@ -119,12 +120,15 @@ while True:
         thread = threading.Thread(
             target=handle_client, args=(conn, addr, args, logger)
         )
+        thread.daemon = True
         thread.start()
-    except Exception as e:
+        threads.append(thread)
+    except Exception:
         break
 if args.protocol == "sr":
     skt.keep_running = False
     recv_thread.join()
 else:
     skt.close()
-    thread.join()
+# for thread in threads:
+#     thread.join()

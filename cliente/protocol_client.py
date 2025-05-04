@@ -1,9 +1,8 @@
-import math
+from common.logger import NORMAL_VERBOSITY, HIGH_VERBOSITY
 import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from common.logger import *
 
 CHUNK_SIZE = 1024
 
@@ -17,12 +16,12 @@ class ProtocolClient:
     def send_start_message(self):
         if self.type == "U":
             self.logger.log(
-                f"[PROTOCOL_CLIENT] enviando mensaje de upload al servidor",
+                "[PROTOCOL_CLIENT] enviando mensaje de upload al servidor",
                 HIGH_VERBOSITY,
             )
         elif self.type == "D":
             self.logger.log(
-                f"[PROTOCOL_CLIENT] enviando mensaje de download al servidor",
+                "[PROTOCOL_CLIENT] enviando mensaje de download al servidor",
                 HIGH_VERBOSITY,
             )
         else:
@@ -49,7 +48,7 @@ class ProtocolClient:
             return
         size_file = os.path.getsize(file_complete)
         self.logger.log(
-            f"[PROTOCOL_CLIENT] archivo {file_complete} tiene tamanio {size_file}",
+            f"[PROTOCOL_CLIENT] archivo {file_complete} tiene tamanio {size_file}",  # noqa: E501
             HIGH_VERBOSITY,
         )
         size = size_file
@@ -58,7 +57,7 @@ class ProtocolClient:
 
         # mando el archivo
         with open(file_complete, "rb") as f:
-            self.logger.log(f"[PROTOCOL_CLIENT] mando archivo", HIGH_VERBOSITY)
+            self.logger.log("[PROTOCOL_CLIENT] mando archivo", HIGH_VERBOSITY)
 
             if ((size / 1024) % 2) == 0:
                 size = int(size / 1024)
@@ -101,7 +100,7 @@ class ProtocolClient:
             return
         with open(file_complete, "wb") as f:
             self.logger.log(
-                f"[PROTOCOL_CLIENT] recibiendo archivo", HIGH_VERBOSITY
+                "[PROTOCOL_CLIENT] recibiendo archivo", HIGH_VERBOSITY
             )
             size = 0
             if (size_file / 1024) % 2 == 0:

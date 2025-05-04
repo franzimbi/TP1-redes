@@ -28,7 +28,7 @@ class Router(Node):
         self.cmd("iptables -A OUTPUT -p icmp -j ACCEPT")
         self.cmd("iptables -A FORWARD -p icmp -j ACCEPT")
         self.cmd(
-            "iptables -I OUTPUT -p icmp --icmp-type fragmentation-needed -j ACCEPT"
+            "iptables -I OUTPUT -p icmp --icmp-type fragmentation-needed -j ACCEPT"  # noqa: E501
         )
 
     def terminate(self):
@@ -49,7 +49,7 @@ class Host(Node):
             # Detectar la interfaz conectada al host (asumimos eth0)
             loss_pct = params["loss"]
             self.cmd(
-                f"tc qdisc add dev {self.name}-eth0 root netem loss {loss_pct}%"
+                f"tc qdisc add dev {self.name}-eth0 root netem loss {loss_pct}%"  # noqa: E501
             )
 
     def terminate(self):
@@ -94,7 +94,8 @@ class LinearEndsTopo(Topo):
             host_client_i = self.addHost(
                 f"h{i + 1}",
                 ip=f"10.0.1.{i}/24",
-                defaultRoute=f"via {DEFAULT_GATEWAY_CLIENTS_SIDE}",  # router's eth1 interface
+                # router's eth1 interface
+                defaultRoute=f"via {DEFAULT_GATEWAY_CLIENTS_SIDE}",
                 cls=Host,
             )
             if i == 1:
@@ -105,8 +106,9 @@ class LinearEndsTopo(Topo):
 
 topos = {
     "linends": (
-        lambda client_number=DEFAULT_CLIENT_NUMBER, mtu=DO_NOT_MODIFY_MTU, loss=0: LinearEndsTopo(
-            client_number, mtu, loss
-        )
-    )
-}
+        lambda client_number=DEFAULT_CLIENT_NUMBER,
+        mtu=DO_NOT_MODIFY_MTU,
+        loss=0: LinearEndsTopo(
+            client_number,
+            mtu,
+            loss))}

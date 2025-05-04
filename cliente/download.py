@@ -1,17 +1,16 @@
+import threading
+import argparse
 import os
-import socket
 import sys
 import time
 
-from protocol_client import ProtocolClient
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import argparse
-import threading
-
-from common.logger import *
-from common.socket_rdt_sr import SocketRDT_SR
-from common.socket_rdt_sw import SocketRDT_SW
+from common.socket_rdt_sw import SocketRDT_SW  # noqa: E402
+from common.socket_rdt_sr import SocketRDT_SR  # noqa: E402
+from common.logger import Logger, NORMAL_VERBOSITY  # noqa: E402
+from common.logger import HIGH_VERBOSITY  # noqa: E402
+from common.logger import LOW_VERBOSITY  # noqa: E402
+from protocol_client import ProtocolClient  # noqa: E402
 
 
 def parse_args():
@@ -72,7 +71,7 @@ skt = None
 if args.protocol == "sr":
     print("host es: ", args.host)
     print("port es: ", args.port)
-    skt = SocketRDT_SR(args.host, args.port)
+    skt = SocketRDT_SR(args.host, args.port, logger)
 
 elif args.protocol == "sw":
     skt = SocketRDT_SW()
@@ -88,7 +87,7 @@ logger.log(f"Arrancando cliente en: ({args.host}:{args.port})", HIGH_VERBOSITY)
 protocol = ProtocolClient("D", skt, logger)
 
 protocol.send_start_message()
-print(f"envido mensaje de download al servidor")
+print("envido mensaje de download al servidor")
 protocol.recv_file(args.dst, args.name)
 
 skt.close()

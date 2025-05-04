@@ -1,8 +1,5 @@
 import random
 import socket
-
-import numpy as np
-
 from common.package import Package
 
 MAX_PACKAGE_SIZE = 1035
@@ -16,7 +13,7 @@ DEFAULT_LISTENERS = 5
 class SocketRDT_SW:
 
     def __init__(self):
-        self.sequence_number = random.randint(0, MAX_SEQ_NUM - 1)
+        self.sequence_number = random.randint(0, MAX_SEQ_NUM)
         self.ack_number = 0
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._is_connected = False
@@ -50,7 +47,7 @@ class SocketRDT_SW:
         self.socket.settimeout(1)  # Timeout de 1 segundo
         if packet.want_SYN():
             if len(self.sockets) >= self.socket_max:
-                # print(f"[SERVER] Se supero el maximo de {self.socket_max} conexiones")
+                # print(f"[SERVER] Se supero el maximo de {self.socket_max} conexiones")   # noqa: E501
                 return (None, None)
             seq_num = (packet.get_sequence_number() + 1) % MAX_SEQ_NUM
             # print("[SERVER] Recibido SYN, enviando SYN-ACK")
@@ -85,7 +82,7 @@ class SocketRDT_SW:
                 self.sockets.append(new_socket)
                 return new_socket, client_address
 
-        # print("[SERVER] No se recibió SYN, cerrando conexión, ¿quien chota sos?")
+        # print("[SERVER] No se recibió SYN, cerrando conexión, ¿quien chota sos?")   # noqa: E501
         return (None, None)
 
     def _create_client_handler(self, client_address, seq_num):
@@ -123,14 +120,14 @@ class SocketRDT_SW:
 
         if counter == TOTAL_RETRIES:
             raise Exception(
-                "[CLIENT] Timeout esperando SYN-ACK, se agotaron los reintentos"
+                "[CLIENT] Timeout esperando SYN-ACK, se agotaron los reintentos"   # noqa: E501
             )
 
         if server_syn_ack.want_SYN():
             self.ack_number = (
                 server_syn_ack.get_sequence_number() + 1
             ) % MAX_SEQ_NUM
-            # print(f"[CLIENT] Recibido SYN-ACK, enviando ACK {self.ack_number}")
+            # print(f"[CLIENT] Recibido SYN-ACK, enviando ACK {self.ack_number}")   # noqa: E501
             # print("[CLIENT] Recibido SYN-ACK, enviando ACK")
             client_ack_pack = Package()
             client_ack_pack.set_ACK_FLAG()
@@ -175,7 +172,7 @@ class SocketRDT_SW:
                 return data
             else:
                 # Paquete duplicado o fuera de orden → reenviamos último ACK
-                # print(f"[RECV] Secuencia inesperada: {seq_num}, esperaba: {self.ack_number}. Reenviando ACK.")
+                # print(f"[RECV] Secuencia inesperada: {seq_num}, esperaba: {self.ack_number}. Reenviando ACK.")   # noqa: E501
                 ack_pack = Package()
                 ack_pack.set_ACK_FLAG()
                 ack_pack.set_sequence_number(self.ack_number)
@@ -187,7 +184,7 @@ class SocketRDT_SW:
     def sendall(self, data):
         # print(f"[SEND] Enviando {len(data)} bytes")
         chunks = [
-            data[i : i + MAX_DATA_SIZE]
+            data[i:i + MAX_DATA_SIZE]
             for i in range(0, len(data), MAX_DATA_SIZE)
         ]
 
@@ -199,7 +196,7 @@ class SocketRDT_SW:
                 self._send(chunk, (retries != 0))
                 # packet = Package()
                 # packet.set_data(chunk)
-                # self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
+                # self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM   # noqa: E501
                 # packet.set_sequence_number(self.sequence_number)
                 # self.socket.sendto(packet.packaging(), self.adress)
 
@@ -209,21 +206,21 @@ class SocketRDT_SW:
                     ack_packet = Package()
                     ack_packet.decode_to_package(ack_data)
                     # Verificar si el ACK es correcto
-                    # print(f"[SEND] Recibido ACK: {ack_packet.get_ack_number()}")
-                    # print(f"[SEND] Secuencia esperada: {(self.sequence_number + 1) % MAX_SEQ_NUM}")
-                    # print(f"[SEND] ACK esperado: {ack_packet.want_ACK_FLAG()}")
+                    # print(f"[SEND] Recibido ACK: {ack_packet.get_ack_number()}")   # noqa: E501
+                    # print(f"[SEND] Secuencia esperada: {(self.sequence_number + 1) % MAX_SEQ_NUM}")   # noqa: E501
+                    # print(f"[SEND] ACK esperado: {ack_packet.want_ACK_FLAG()}")   # noqa: E501
                     if (
                         ack_packet.want_ACK_FLAG()
                         and ack_packet.get_ack_number()
                         == ((self.sequence_number + 1) % MAX_SEQ_NUM)
                     ):
-                        # print(f"[SEND] ACK correcto, secuencia: {ack_packet.get_ack_number()}")
+                        # print(f"[SEND] ACK correcto, secuencia: {ack_packet.get_ack_number()}")   # noqa: E501
                         ack_received = True
-                        # self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
+                        # self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM   # noqa: E501
                     else:
                         retries += 1
                 except socket.timeout:
-                    # print(f"[SEND] Timeout esperando ACK, reintentando {retries + 1} seq_num: {self.sequence_number}" )
+                    # print(f"[SEND] Timeout esperando ACK, reintentando {retries + 1} seq_num: {self.sequence_number}" )   # noqa: E501
                     retries += 1
                     continue
 

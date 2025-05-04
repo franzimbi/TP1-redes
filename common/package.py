@@ -50,7 +50,7 @@ class Package:
         self.FIN = int.from_bytes(data[5:6], byteorder="big")
         self.ACK = int.from_bytes(data[6:7], byteorder="big")
         self.data_length = int.from_bytes(data[7:11], byteorder="big")
-        self.data = data[11 : 11 + self.data_length]
+        self.data = data[11: 11 + self.data_length]
 
     def set_SYN(self):
         self.SYN = np.uint8(1)
@@ -88,10 +88,9 @@ class Package:
     def __str__(self):
         return (
             "\n\n----- PACKAGE CONTENT -----\n"
-            f"Sequence_n: {self.sequence_number} | Ack_n: {self.ack_number} | SYN: {self.SYN} | FIN: {self.FIN} | ACK: {self.ACK} |\n"
+            f"Sequence_n: {self.sequence_number} | Ack_n: {self.ack_number} | SYN: {self.SYN} | FIN: {self.FIN} | ACK: {self.ACK} |\n"  # noqa: E501
             f"Data Len: {self.data_length} | Data: {self.data}\n"
-            "--------------------------\n\n"
-        )
+            "--------------------------\n\n")
 
 
 # header udp

@@ -1,10 +1,5 @@
-import math
 import os
-import socket
-
-import protocol_server
-
-from common.logger import *
+from common.logger import NORMAL_VERBOSITY, HIGH_VERBOSITY
 
 
 class ProtocolServer:
@@ -41,12 +36,12 @@ class ProtocolServer:
             )
             return
         self.logger.log(
-            f"[server_protocol]: el path al archivo {name}: {size_file} existe",
+            f"[server_protocol]: el path al archivo {name}: {size_file} existe",   # noqa: E501
             HIGH_VERBOSITY,
         )
         with open(path_complete, "wb") as f:
             self.logger.log(
-                f"[server_protocol]: creando el archivo {path_complete} y recibiendo",
+                f"[server_protocol]: creando el archivo {path_complete} y recibiendo",   # noqa: E501
                 NORMAL_VERBOSITY,
             )
             size = 0
@@ -96,7 +91,7 @@ class ProtocolServer:
         )
 
         with open(file, "rb") as f:
-            self.logger.log(f"[server_protocol] mando archivo", HIGH_VERBOSITY)
+            self.logger.log("[server_protocol] mando archivo", HIGH_VERBOSITY)
 
             if ((size / 1024) % 2) == 0:
                 size = int(size / 1024)

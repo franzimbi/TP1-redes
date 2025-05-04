@@ -1,17 +1,17 @@
+import threading
+import argparse
 import os
 import socket
 import sys
 import time
 
-from protocol_client import ProtocolClient
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import argparse
-import threading
-
-from common.logger import *
-from common.socket_rdt_sr import SocketRDT_SR
-from common.socket_rdt_sw import SocketRDT_SW
+from common.socket_rdt_sw import SocketRDT_SW  # noqa: E402
+from common.socket_rdt_sr import SocketRDT_SR  # noqa: E402
+from common.logger import Logger, NORMAL_VERBOSITY  # noqa: E402
+from common.logger import HIGH_VERBOSITY  # noqa: E402
+from common.logger import LOW_VERBOSITY  # noqa: E402
+from protocol_client import ProtocolClient  # noqa: E402
 
 
 def parse_args():
@@ -75,7 +75,7 @@ if args.quiet:
 start = time.time()
 skt = None
 if args.protocol == "sr":
-    skt = SocketRDT_SR(args.host, args.port)
+    skt = SocketRDT_SR(args.host, args.port, logger)
 
 elif args.protocol == "sw":
     skt = SocketRDT_SW()
