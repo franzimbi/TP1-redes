@@ -1,7 +1,10 @@
 import sys
+
 from client import Client
-class Acceptor():
-    
+
+
+class Acceptor:
+
     def __init__(self, skt):
         self.skt = skt
         self.clients = []
@@ -14,16 +17,15 @@ class Acceptor():
                 peer = self.skt.accept()
                 print(f"[acceptor.py]: Accepted connection from peer")
                 client = Client(peer)
-                print ("[acceptor.py]: client fue creado")
+                print("[acceptor.py]: client fue creado")
                 client.start()
-                print ("[acceptor.py]: client fue iniciado")
+                print("[acceptor.py]: client fue iniciado")
                 self.clients.append(client)
-                print ("[acceptor.py]: client fue agregado a la lista")
+                print("[acceptor.py]: client fue agregado a la lista")
                 self.reap_dead()
         except Exception as e:
-            print ("[acceptor.py]: Error en el acceptor")
+            print("[acceptor.py]: Error en el acceptor")
             print(str(e), file=sys.stderr)
-
 
     def reap_dead(self):
         alive_clients = []
@@ -32,9 +34,9 @@ class Acceptor():
                 client.stop()
                 client.join()
                 adress = client.get_adress()
-                print ("[acceptor.py]: cliente muerto con adress: ", adress)
+                print("[acceptor.py]: cliente muerto con adress: ", adress)
                 self.skt.close_client(adress)
-                print ("[acceptor.py]: cliente cerrado")
+                print("[acceptor.py]: cliente cerrado")
             else:
                 alive_clients.append(client)
         self.clients = alive_clients
@@ -47,7 +49,7 @@ class Acceptor():
         if self.clients:
             i = 0
             for client in self.clients:
-                print ("[acceptor.py]: cerrando cliente numero: ", i)
+                print("[acceptor.py]: cerrando cliente numero: ", i)
                 i += 1
                 client.stop()
                 client.join()

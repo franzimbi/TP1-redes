@@ -1,7 +1,9 @@
-import socket
-from common.package import Package
 import random
+import socket
+
 import numpy as np
+
+from common.package import Package
 
 MAX_PACKAGE_SIZE = 1035
 MAX_DATA_SIZE = 1024
@@ -12,7 +14,7 @@ DEFAULT_LISTENERS = 5
 
 
 class SocketRDT_SW:
-    
+
     def __init__(self):
         self.sequence_number = random.randint(0, MAX_SEQ_NUM - 1)
         self.ack_number = 0
@@ -20,10 +22,9 @@ class SocketRDT_SW:
         self._is_connected = False
         self.sockets = []
         self.socket_max = DEFAULT_LISTENERS
-        self._recv_buffer = b''
+        self._recv_buffer = b""
 
-
-    #Para Servidor
+    # Para Servidor
     def bind(self, adress):
         self.socket.bind(adress)
 
@@ -39,7 +40,7 @@ class SocketRDT_SW:
     def _close_sockets(self):
         for sock in self.sockets:
             sock.close()
-        
+
     def accept(self):
         # print("[SERVER] Esperando SYN...")
         data, client_address = self.socket.recvfrom(MAX_PACKAGE_SIZE)
@@ -54,22 +55,26 @@ class SocketRDT_SW:
             seq_num = (packet.get_sequence_number() + 1) % MAX_SEQ_NUM
             # print("[SERVER] Recibido SYN, enviando SYN-ACK")
             # print(f"[SERVER] Enviando SYN-ACK a {client_address}")
-            new_socket, new_port = self._create_client_handler(client_address, seq_num)
+            new_socket, new_port = self._create_client_handler(
+                client_address, seq_num
+            )
             server_syn_pack = Package()
             server_syn_pack.set_SYN()
-            server_syn_pack.set_data(new_port.to_bytes(2, byteorder='big'))
+            server_syn_pack.set_data(new_port.to_bytes(2, byteorder="big"))
             server_syn_pack.set_sequence_number(self.sequence_number)
-            
+
             client_ack_pack = Package()
-            
+
             counter = 0
-            while not client_ack_pack.want_ACK_FLAG() and counter < TOTAL_RETRIES:
+            while (
+                not client_ack_pack.want_ACK_FLAG() and counter < TOTAL_RETRIES
+            ):
                 self.socket.sendto(server_syn_pack.packaging(), client_address)
                 try:
                     ack_data, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
                     client_ack_pack.decode_to_package(ack_data)
                 except socket.timeout:
-                    # print("[SERVER] Timeout esperando ACK, reintentando...") 
+                    # print("[SERVER] Timeout esperando ACK, reintentando...")
                     counter += 1
                     continue
 
@@ -79,11 +84,9 @@ class SocketRDT_SW:
                 new_socket._is_connected = True
                 self.sockets.append(new_socket)
                 return new_socket, client_address
-                
-                
+
         # print("[SERVER] No se recibió SYN, cerrando conexión, ¿quien chota sos?")
         return (None, None)
-
 
     def _create_client_handler(self, client_address, seq_num):
         new_socket = SocketRDT_SW()
@@ -95,8 +98,8 @@ class SocketRDT_SW:
 
     def _connect_to_peer(self, client_address):
         self.socket.connect(client_address)
-    
-    #Para Cliente
+
+    # Para Cliente
     def connect(self, adress):
         # print("[CLIENT] Enviando SYN")
         client_syn_pack = Package()
@@ -104,7 +107,7 @@ class SocketRDT_SW:
         client_syn_pack.set_sequence_number(self.sequence_number)
         self.socket.settimeout(1)  # Timeout de 1 segundo
         server_syn_ack = Package()
-        
+
         counter = 0
         while not server_syn_ack.want_SYN() and counter < TOTAL_RETRIES:
             # print("[CLIENT] Enviando SYN en el while")
@@ -119,17 +122,26 @@ class SocketRDT_SW:
                 continue
 
         if counter == TOTAL_RETRIES:
-            raise Exception("[CLIENT] Timeout esperando SYN-ACK, se agotaron los reintentos")
-            
+            raise Exception(
+                "[CLIENT] Timeout esperando SYN-ACK, se agotaron los reintentos"
+            )
+
         if server_syn_ack.want_SYN():
-            self.ack_number = (server_syn_ack.get_sequence_number() + 1) % MAX_SEQ_NUM
+            self.ack_number = (
+                server_syn_ack.get_sequence_number() + 1
+            ) % MAX_SEQ_NUM
             # print(f"[CLIENT] Recibido SYN-ACK, enviando ACK {self.ack_number}")
             # print("[CLIENT] Recibido SYN-ACK, enviando ACK")
             client_ack_pack = Package()
             client_ack_pack.set_ACK_FLAG()
             self.socket.sendto(client_ack_pack.packaging(), adress)
             self._is_connected = True
-            self.socket.connect((adress[0], int.from_bytes(server_syn_ack.get_data(), byteorder='big')))
+            self.socket.connect(
+                (
+                    adress[0],
+                    int.from_bytes(server_syn_ack.get_data(), byteorder="big"),
+                )
+            )
             # print("[CLIENT] Conexión establecida")
 
     def recv(self, n_bytes):
@@ -138,14 +150,16 @@ class SocketRDT_SW:
             try:
                 # self.socket.settimeout(0.5)
                 # print(f"[CLIENT] Estoy por recibir el ack {self.ack_number}")
-                received_bytes, address = self.socket.recvfrom(n_bytes+HEADER_SIZE)
+                received_bytes, address = self.socket.recvfrom(
+                    n_bytes + HEADER_SIZE
+                )
                 pack = Package()
                 pack.decode_to_package(received_bytes)
                 seq_num = pack.get_sequence_number()
             except socket.timeout:
                 # print("[CLIENT] Timeout esperando paquete, reintentando...")
                 break
-            
+
             # self.socket.settimeout(None)
             if seq_num == self.ack_number:
                 # Paquete válido y esperado
@@ -167,13 +181,15 @@ class SocketRDT_SW:
                 ack_pack.set_sequence_number(self.ack_number)
                 ack_pack.set_ACK(self.ack_number)
                 self.socket.send(ack_pack.packaging())
-        
+
         self.close()
 
-    
     def sendall(self, data):
         # print(f"[SEND] Enviando {len(data)} bytes")
-        chunks = [data[i:i + MAX_DATA_SIZE] for i in range(0, len(data), MAX_DATA_SIZE)]
+        chunks = [
+            data[i : i + MAX_DATA_SIZE]
+            for i in range(0, len(data), MAX_DATA_SIZE)
+        ]
 
         for chunk in chunks:
             retries = 0
@@ -196,10 +212,14 @@ class SocketRDT_SW:
                     # print(f"[SEND] Recibido ACK: {ack_packet.get_ack_number()}")
                     # print(f"[SEND] Secuencia esperada: {(self.sequence_number + 1) % MAX_SEQ_NUM}")
                     # print(f"[SEND] ACK esperado: {ack_packet.want_ACK_FLAG()}")
-                    if ack_packet.want_ACK_FLAG() and ack_packet.get_ack_number() == ((self.sequence_number + 1) % MAX_SEQ_NUM):
+                    if (
+                        ack_packet.want_ACK_FLAG()
+                        and ack_packet.get_ack_number()
+                        == ((self.sequence_number + 1) % MAX_SEQ_NUM)
+                    ):
                         # print(f"[SEND] ACK correcto, secuencia: {ack_packet.get_ack_number()}")
                         ack_received = True
-                        #self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
+                        # self.sequence_number = (self.sequence_number + 1) % MAX_SEQ_NUM
                     else:
                         retries += 1
                 except socket.timeout:
@@ -209,13 +229,15 @@ class SocketRDT_SW:
 
             if not ack_received:
 
-                    raise Exception("[SEND] Fallo en el envío, se agotaron los reintentos")
-    
-    def _send(self,chunk, resend):
+                raise Exception(
+                    "[SEND] Fallo en el envío, se agotaron los reintentos"
+                )
+
+    def _send(self, chunk, resend):
         seq_num = (self.sequence_number + 1) % MAX_SEQ_NUM
         if resend:
             seq_num = self.sequence_number
-        
+
         packet = Package()
         packet.set_data(chunk)
         self.sequence_number = seq_num
@@ -223,7 +245,7 @@ class SocketRDT_SW:
         # print(f"[SEND] Enviando pack con seq num: {self.sequence_number}")
 
         self.socket.send(packet.packaging())
-        
+
     def close(self):
         self._close_sockets()
         self._reap_dead_sockets()

@@ -1,23 +1,28 @@
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from common.socket_rdt_sw import SocketRDT_SW
-from common.socket_rdt_sr import SocketRDT_SR
-import threading as t
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import socket
-from protocol_server import ProtocolServer 
+import threading as t
+
 from acceptor import Acceptor
+from protocol_server import ProtocolServer
+
+from common.socket_rdt_sr import SocketRDT_SR
+from common.socket_rdt_sw import SocketRDT_SW
 
 BUFFER = 1024
+
 
 # __MAIN__
 def recv_loop(socket_principal):
     while True:
         socket_principal.recv_all()
 
+
 def main():
     skt = SocketRDT_SR("10.0.0.2", 8082)
-    #skt = SocketRDT_SR("localhost", 8082)
+    # skt = SocketRDT_SR("localhost", 8082)
     skt.bind()
     acceptor = Acceptor(skt)
 
@@ -29,10 +34,9 @@ def main():
     accepter.daemon = True
     accepter.start()
 
-
     while True:
         user_input = input().rstrip()
-        if user_input == 'q':
+        if user_input == "q":
             print("Shutting down server...")
             break
 
@@ -41,15 +45,12 @@ def main():
     print("2")
     accepter.join()
     print("3")
-    recv_thread.join() 
+    recv_thread.join()
     print("cerre")
 
 
 if __name__ == "__main__":
     main()
-
-
-
 
 
 # BUFFER_SIZE = 4096
@@ -71,19 +72,17 @@ if __name__ == "__main__":
 #     i += 1
 #     sock.sendto(response.encode(), address)
 
-#skt = SocketRDT_SR("localhost", 8081)
-#skt = SocketRDT_SW("localhost", 8081)
-#skt = SocketRDT_SW("10.0.0.2", 8081)
+# skt = SocketRDT_SR("localhost", 8081)
+# skt = SocketRDT_SW("localhost", 8081)
+# skt = SocketRDT_SW("10.0.0.2", 8081)
 
-#skt.bind()
-#i = 0
-#while True:
-    #data = skt.recv_all()
-    #data = skt.recv()
-    #if data is None:
-        #print("[SERVIDOR] Conexión finalizada.")
-        #break
-    # print(f"Recibido {i}: {data.decode('utf-8')}")
-    #i+=1
-
-
+# skt.bind()
+# i = 0
+# while True:
+# data = skt.recv_all()
+# data = skt.recv()
+# if data is None:
+# print("[SERVIDOR] Conexión finalizada.")
+# break
+# print(f"Recibido {i}: {data.decode('utf-8')}")
+# i+=1

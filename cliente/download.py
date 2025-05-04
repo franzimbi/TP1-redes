@@ -1,36 +1,65 @@
-import time
-from protocol_client import ProtocolClient
+import os
 import socket
 import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from common.logger import *
+import time
+
+from protocol_client import ProtocolClient
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import argparse
-from common.socket_rdt_sw import SocketRDT_SW
-from common.socket_rdt_sr import SocketRDT_SR
 import threading
+
+from common.logger import *
+from common.socket_rdt_sr import SocketRDT_SR
+from common.socket_rdt_sw import SocketRDT_SW
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Servidor de almacenamiento y descarga de archivos."
     )
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("-v", "--verbose", action="count", default=NORMAL_VERBOSITY, help="full output verbosity")
-    group.add_argument("-q", "--quiet", action="store_true", help="no verbosity")
-    
-    parser.add_argument("-H", "--host", type=str, default="127.0.0.1", help="server IP address")
-    parser.add_argument("-p", "--port", type=int, default=8080, help="server port")
-    parser.add_argument("-d", "--dst", type=str, required=True, help="destination file path")
-    parser.add_argument("-n", "--name", type=str, required=True, help="file name")
-    parser.add_argument("-r", "--protocol", type=str, choices=["sw", "sr"], default="", help="error recovery protocol")
+    group.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=NORMAL_VERBOSITY,
+        help="full output verbosity",
+    )
+    group.add_argument(
+        "-q", "--quiet", action="store_true", help="no verbosity"
+    )
+
+    parser.add_argument(
+        "-H", "--host", type=str, default="127.0.0.1", help="server IP address"
+    )
+    parser.add_argument(
+        "-p", "--port", type=int, default=8080, help="server port"
+    )
+    parser.add_argument(
+        "-d", "--dst", type=str, required=True, help="destination file path"
+    )
+    parser.add_argument(
+        "-n", "--name", type=str, required=True, help="file name"
+    )
+    parser.add_argument(
+        "-r",
+        "--protocol",
+        type=str,
+        choices=["sw", "sr"],
+        required=True,
+        help="error recovery protocol",
+    )
 
     return parser.parse_args()
+
 
 def recv_loop(socket_principal):
     while socket_principal.keep_running:
         socket_principal.recv_all()
 
-#__main__
+
+# __main__
 args = parse_args()
 logger = Logger("[DOWNLOAD]")
 start = time.time()
@@ -47,8 +76,6 @@ if args.protocol == "sr":
 
 elif args.protocol == "sw":
     skt = SocketRDT_SW()
-else:
-    skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 if args.protocol == "sr":
     recv_thread = threading.Thread(target=recv_loop, args=(skt,))
@@ -58,7 +85,7 @@ else:
     skt.connect((args.host, args.port))
 logger.log(f"Arrancando cliente en: ({args.host}:{args.port})", HIGH_VERBOSITY)
 
-protocol = ProtocolClient('D', skt, logger)
+protocol = ProtocolClient("D", skt, logger)
 
 protocol.send_start_message()
 print(f"envido mensaje de download al servidor")
@@ -68,9 +95,9 @@ skt.close()
 
 if args.protocol == "sr":
     skt.keep_running = False
-    print ("hice keep_running = False")
+    print("hice keep_running = False")
     recv_thread.join()
-    print ("hice join de recv_thread")
+    print("hice join de recv_thread")
 
 logger.log("Fin del cliente download", NORMAL_VERBOSITY)
 end = time.time()

@@ -1,44 +1,76 @@
-import socket
-import threading
-import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from common.logger import *
-from protocol_server import ProtocolServer
+import socket
+import sys
+import threading
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import argparse
-from common.socket_rdt_sw import SocketRDT_SW
+
+from protocol_server import ProtocolServer
+
+from common.logger import *
 from common.socket_rdt_sr import SocketRDT_SR
+from common.socket_rdt_sw import SocketRDT_SW
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Servidor de almacenamiento y descarga de archivos."
     )
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("-v", "--verbose", action="count", default=NORMAL_VERBOSITY, help="full output verbosity")
-    group.add_argument("-q", "--quiet", action="store_true", help="no verbosity")
-    
-    parser.add_argument('-H', '--host', type=str, default="127.0.0.1", help='service IP address')
-    parser.add_argument('-p', '--port', type=int, default=8080, help='service port')
-    parser.add_argument('-s', '--storage', type=str, default="/", help='storage dir path')
-    parser.add_argument('-r', '--protocol', type=str, choices=["sw", "sr"], default="", help='error recovery protocol')
+    group.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=NORMAL_VERBOSITY,
+        help="full output verbosity",
+    )
+    group.add_argument(
+        "-q", "--quiet", action="store_true", help="no verbosity"
+    )
+
+    parser.add_argument(
+        "-H",
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="service IP address",
+    )
+    parser.add_argument(
+        "-p", "--port", type=int, default=8080, help="service port"
+    )
+    parser.add_argument(
+        "-s", "--storage", type=str, required=True, help="storage dir path"
+    )
+    parser.add_argument(
+        "-r",
+        "--protocol",
+        type=str,
+        choices=["sw", "sr"],
+        required=True,
+        help="error recovery protocol",
+    )
 
     return parser.parse_args()
 
+
 BUFFER = 1024
 shutdown_event = threading.Event()
+
 
 def recv_loop(socket_principal):
     while socket_principal.keep_running:
         socket_principal.recv_all()
 
+
 def handle_client(conn, addr, args, logger):
     proto = ProtocolServer(conn, logger)
     try:
         option = proto.recv_option()
-        if option == 'U':
+        if option == "U":
             logger.log(f"[{addr}] Opcion Upload detectada", HIGH_VERBOSITY)
             proto.recv_file(args.storage)
-        elif option == 'D':
+        elif option == "D":
             logger.log(f"[{addr}] Opcion Download detectada", HIGH_VERBOSITY)
             print(f"[{addr}] Opcion Download detectada")
             proto.send_file(args.storage)
@@ -47,8 +79,9 @@ def handle_client(conn, addr, args, logger):
     except Exception as e:
         logger.log(f"[{addr}] Error: {e}", NORMAL_VERBOSITY)
     finally:
-        #conn.close()
+        # conn.close()
         logger.log(f"[{addr}] Conexion cerrada", HIGH_VERBOSITY)
+
 
 # __MAIN__
 args = parse_args()
@@ -83,7 +116,9 @@ while True:
     try:
         conn, addr = skt.accept()
         logger.log(f"conexion aceptada de {addr}", HIGH_VERBOSITY)
-        thread = threading.Thread(target=handle_client, args=(conn, addr, args, logger))
+        thread = threading.Thread(
+            target=handle_client, args=(conn, addr, args, logger)
+        )
         thread.start()
     except Exception as e:
         break

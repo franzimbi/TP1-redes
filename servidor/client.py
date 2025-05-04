@@ -1,10 +1,11 @@
-from protocol_server import ProtocolServer
 import threading as t
+
+from protocol_server import ProtocolServer
 
 
 class Client:
     def __init__(self, skt):
-        self.skt = skt  
+        self.skt = skt
         self.is_alive = True
         self.protocol = None
         self.thread = None
@@ -13,12 +14,11 @@ class Client:
         print("[client.py]: starting client thread")
         self.thread = t.Thread(target=self.start_connection)
         self.thread.daemon = True
-        self.thread.start() 
-
+        self.thread.start()
 
     def start_connection(self):
         print("[client.py]: entra al thread")
-        while self.is_alive:            
+        while self.is_alive:
             data = self.skt.process_package()
             if data is None:
                 print("[client.py] Conexión finalizada.")
@@ -28,11 +28,11 @@ class Client:
     def stop(self):
         print("[client.py]: stopping client thread")
         self.is_alive = False
-        #self.protocol.close()
-    
+        # self.protocol.close()
+
     def join(self):
         self.thread.join()
-    
+
     def get_adress(self):
         return self.skt.get_adress()
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
+from mininet.link import TCLink
 from mininet.node import Node
 from mininet.topo import Topo
-from mininet.link import TCLink
 
 DEFAULT_CLIENT_NUMBER = 1
 DO_NOT_MODIFY_MTU = -1
@@ -15,7 +15,9 @@ class Router(Node):
 
         self.cmd("sysctl -w net.ipv4.ip_forward=1")
         self.cmd(f"ifconfig {self.name}-eth0 {DEFAULT_GATEWAY_SERVER_SIDE}/24")
-        self.cmd(f"ifconfig {self.name}-eth1 {DEFAULT_GATEWAY_CLIENTS_SIDE}/24")
+        self.cmd(
+            f"ifconfig {self.name}-eth1 {DEFAULT_GATEWAY_CLIENTS_SIDE}/24"
+        )
 
         if params.get("mtu", DO_NOT_MODIFY_MTU) != DO_NOT_MODIFY_MTU:
             self.cmd(f"ifconfig {self.name}-eth0 mtu {params.get('mtu')}")
@@ -103,8 +105,8 @@ class LinearEndsTopo(Topo):
 
 topos = {
     "linends": (
-        lambda client_number=DEFAULT_CLIENT_NUMBER,
-        mtu=DO_NOT_MODIFY_MTU,
-        loss=0: LinearEndsTopo(client_number, mtu, loss)
+        lambda client_number=DEFAULT_CLIENT_NUMBER, mtu=DO_NOT_MODIFY_MTU, loss=0: LinearEndsTopo(
+            client_number, mtu, loss
+        )
     )
 }
