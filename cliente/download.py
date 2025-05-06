@@ -75,29 +75,30 @@ if args.protocol == "sr":
 
 elif args.protocol == "sw":
     skt = SocketRDT_SW(logger)
+try: 
+    if args.protocol == "sr":
+        recv_thread = threading.Thread(target=recv_loop, args=(skt,))
+        recv_thread.start()
+        skt.connect()
+    else:
+        skt.connect((args.host, args.port))
+    logger.log(f"Arrancando cliente en: ({args.host}:{args.port})", HIGH_VERBOSITY)
+    protocol = ProtocolClient("D", skt, logger)
 
-if args.protocol == "sr":
-    recv_thread = threading.Thread(target=recv_loop, args=(skt,))
-    recv_thread.start()
-    skt.connect()
-else:
-    skt.connect((args.host, args.port))
-logger.log(f"Arrancando cliente en: ({args.host}:{args.port})", HIGH_VERBOSITY)
+    protocol.send_start_message()
+    protocol.recv_file(args.dst, args.name)
+except Exception:
+    logger.log(f"Error al conectar", NORMAL_VERBOSITY)
+finally:
 
-protocol = ProtocolClient("D", skt, logger)
+    skt.close()
 
-protocol.send_start_message()
-print("envido mensaje de download al servidor")
-protocol.recv_file(args.dst, args.name)
+    if args.protocol == "sr":
+        skt.keep_running = False
+        print("hice keep_running = False")
+        recv_thread.join()
+        print("hice join de recv_thread")
 
-skt.close()
-
-if args.protocol == "sr":
-    skt.keep_running = False
-    print("hice keep_running = False")
-    recv_thread.join()
-    print("hice join de recv_thread")
-
-logger.log("Fin del cliente download", NORMAL_VERBOSITY)
-end = time.time()
-print(f"La función tardó {end - start:.4f} segundos")
+    logger.log("Fin del cliente download", NORMAL_VERBOSITY)
+    end = time.time()
+    print(f"La función tardó {end - start:.4f} segundos")

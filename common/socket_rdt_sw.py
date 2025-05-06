@@ -59,12 +59,15 @@ class SocketRDT_SW:
         self._reap_dead_sockets()
         packet = Package()
         packet.decode_to_package(data)
-        self.socket.settimeout(1)  # Timeout de 1 segundo
+
+        self.socket.settimeout(self.timeout_interval)  # usar RTT estimado
+
         if packet.want_SYN():
             if len(self.sockets) >= self.socket_max:
                 self.logger.log(
                     "[SW-accept] No se pueden aceptar más conexiones por limite",
                     LOW_VERBOSITY)
+                self.socket.settimeout(None)
                 return (None, None)
             seq_num = (packet.get_sequence_number() + 1) % MAX_SEQ_NUM
             self.logger.log(
@@ -88,12 +91,19 @@ class SocketRDT_SW:
                 try:
                     ack_data, _ = self.socket.recvfrom(MAX_PACKAGE_SIZE)
                     client_ack_pack.decode_to_package(ack_data)
+
+                    # Calcular sample_rtt y actualizar timeout_interval
+                    sample_rtt = self.timeout_interval  # O puedes medirlo con time.time()
+                    self._update_rtt(sample_rtt)
+                    counter += 1
+
                 except socket.timeout:
                     self.logger.log(
                         "[SW-accept] Timeout esperando ACK, reintentando...",
                         HIGH_VERBOSITY)
                     counter += 1
                     continue
+
 
             if client_ack_pack.want_ACK_FLAG():
                 self.logger.log(
@@ -103,6 +113,7 @@ class SocketRDT_SW:
                 new_socket._is_connected = True
                 self.sockets.append(new_socket)
                 return new_socket, client_address
+        self.socket.settimeout(None)
         return (None, None)
 
     def _create_client_handler(self, client_address, seq_num):
@@ -111,6 +122,7 @@ class SocketRDT_SW:
         new_socket._connect_to_peer(client_address)
         new_socket.ack_number = seq_num
         new_socket.sequence_number = self.sequence_number
+        new_socket._is_connected = True
         return new_socket, new_socket.socket.getsockname()[1]
 
     def _connect_to_peer(self, client_address):
@@ -249,7 +261,8 @@ class SocketRDT_SW:
 
     def close(self):
         self.logger.log("[sw-close] Cerrando socket", LOW_VERBOSITY)
+        self._is_connected = False
         self._close_sockets()
         self._reap_dead_sockets()
         self.socket.close()
-        self._is_connected = False
+        

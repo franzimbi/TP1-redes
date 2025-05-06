@@ -79,7 +79,8 @@ def handle_client(conn, addr, args, logger):
     except Exception as e:
         logger.log(f"[{addr}] Error: {e}", NORMAL_VERBOSITY)
     finally:
-        # conn.close()
+        if args.protocol == "sw":
+            conn.close()
         logger.log(f"[{addr}] Conexion cerrada", HIGH_VERBOSITY)
 
 
@@ -116,6 +117,8 @@ threads = []
 while True:
     try:
         conn, addr = skt.accept()
+        if conn is None or addr is None:
+            continue
         logger.log(f"conexion aceptada de {addr}", HIGH_VERBOSITY)
         thread = threading.Thread(
             target=handle_client, args=(conn, addr, args, logger)

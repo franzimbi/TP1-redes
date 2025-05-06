@@ -81,29 +81,32 @@ elif args.protocol == "sw":
     skt = SocketRDT_SW(logger)
 else:
     skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    if args.protocol == "sr":
+        recv_thread = threading.Thread(target=recv_loop, args=(skt,))
+        recv_thread.start()
+        skt.connect()
+    else:
+        skt.connect((args.host, args.port))
 
-if args.protocol == "sr":
-    recv_thread = threading.Thread(target=recv_loop, args=(skt,))
-    recv_thread.start()
-    skt.connect()
-else:
-    skt.connect((args.host, args.port))
+    logger.log(f"Arrancando cliente en: ({args.host}:{args.port})", HIGH_VERBOSITY)
 
-logger.log(f"Arrancando cliente en: ({args.host}:{args.port})", HIGH_VERBOSITY)
+    protocol = ProtocolClient("U", skt, logger)
 
-protocol = ProtocolClient("U", skt, logger)
+    protocol.send_start_message()
+    protocol.send_file(args.source, args.name)
+except Exception:
+    logger.log(f"Error al conectar", NORMAL_VERBOSITY)
+finally:
 
-protocol.send_start_message()
-protocol.send_file(args.source, args.name)
+    skt.close()
 
-skt.close()
+    if args.protocol == "sr":
+        skt.keep_running = False
+        print("hice keep_running = False")
+        recv_thread.join()
+        print("hice join de recv_thread")
 
-if args.protocol == "sr":
-    skt.keep_running = False
-    print("hice keep_running = False")
-    recv_thread.join()
-    print("hice join de recv_thread")
-
-logger.log("Fin del cliente upload", NORMAL_VERBOSITY)
-end = time.time()
-print(f"La función tardó {end - start:.4f} segundos")
+    logger.log("Fin del cliente upload", NORMAL_VERBOSITY)
+    end = time.time()
+    print(f"La función tardó {end - start:.4f} segundos")
