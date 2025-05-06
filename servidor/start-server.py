@@ -110,28 +110,33 @@ skt.listen(5)
 
 if args.protocol == "sr":
     recv_thread = threading.Thread(target=recv_loop, args=(skt,))
-    recv_thread.daemon = True
     recv_thread.start()
 
 threads = []
-while True:
-    try:
-        conn, addr = skt.accept()
-        if conn is None or addr is None:
-            continue
-        logger.log(f"conexion aceptada de {addr}", HIGH_VERBOSITY)
-        thread = threading.Thread(
-            target=handle_client, args=(conn, addr, args, logger)
-        )
-        thread.daemon = True
-        thread.start()
-        threads.append(thread)
-    except Exception:
-        break
-if args.protocol == "sr":
-    skt.keep_running = False
-    recv_thread.join()
-else:
-    skt.close()
-# for thread in threads:
-#     thread.join()
+try:
+    while not shutdown_event.is_set():
+        try:
+            conn, addr = skt.accept()
+            if conn is None or addr is None:
+                continue
+            logger.log(f"conexion aceptada de {addr}", HIGH_VERBOSITY)
+            thread = threading.Thread(
+                target=handle_client, args=(conn, addr, args, logger)
+            )
+            thread.daemon = True
+            thread.start()
+            threads.append(thread)
+        except Exception as e:
+            logger.log(f"Error al aceptar conexión: {e}", LOW_VERBOSITY)
+except KeyboardInterrupt:
+    logger.log("Señal de interrupción recibida. Cerrando servidor...", LOW_VERBOSITY)
+    shutdown_event.set()
+finally:
+    if args.protocol == "sr":
+        skt.close_server()
+        recv_thread.join()
+    else:
+        skt.close()
+    for thread in threads:
+        thread.join()
+    logger.log("Servidor cerrado correctamente.", LOW_VERBOSITY)

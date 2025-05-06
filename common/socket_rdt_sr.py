@@ -79,10 +79,10 @@ class SocketRDT_SR:
         self.logger.log(f"[sr-bind] Escuchando en {self.adress}", LOW_VERBOSITY)
 
 
-    # def close_server(self):
-    #     self.keep_running = False
-    #     self.socket.close()
-    #     # print("[SR.SERVIDOR] Socket cerrado correctamente")
+    def close_server(self):
+        self.keep_running = False
+        self.socket.close()
+        print("[SR.SERVIDOR] Socket cerrado correctamente")
 
     # def _mod_seq(self, num):
     #     return num % MAX_SEQ_NUM
@@ -196,7 +196,6 @@ class SocketRDT_SR:
                 new_socket._alpha = 0.125
                 new_socket._beta = 0.25
                 new_socket.send_times = {}
-
                 self.connections[addr_syn] = new_socket
 
                 # enviar SYN+ACK y esperar ACK final
@@ -233,7 +232,7 @@ class SocketRDT_SR:
             self.socket.sendto(final_ack.packaging(), self.adress)
             self._is_connected = True
 
-            # Inicializar correctamente para el envío de datos
+            #Inicializar correctamente para el envío de datos
             
             self.send_base = (self.sequence_number + 1) % MAX_SEQ_NUM
             self.recv_base = (
@@ -364,10 +363,10 @@ class SocketRDT_SR:
     def recv_all(self):
 
         if not self._is_connected:
-            self.logger.log("[SR.RECV] Socket no conectado", LOW_VERBOSITY)
+            #self.logger.log("[SR.RECV] Socket no conectado", LOW_VERBOSITY)
             return None
 
-        self.socket.settimeout(self._estimated_rtt)
+        self.socket.settimeout(2)
         try:
             recived_bytes, sender_adress = self.socket.recvfrom(
                 MAX_PACKAGE_SIZE
@@ -536,6 +535,7 @@ class SocketRDT_SR:
                 self._is_connected = False
                 self.socket.close()
                 # print("[close()] Socket cerrado correctamente")
+                self.process_pack_thread.join() 
                 self.logger.log("[sr-close] Socket cerrado correctamente", HIGH_VERBOSITY)
                 return True
 
@@ -612,12 +612,12 @@ class SocketRDT_SR:
                     # )
             except queue.Empty:
                 retries += 1
-                # print(
-                #     "[SR.END_CONN] Timeout esperando el ACK final del FIN, reintentando...... " +  # noqa: E501
-                #     str(retries))
+                print(
+                    "[SR.END_CONN] Timeout esperando el ACK final del FIN, reintentando...... " +  # noqa: E501
+                    str(retries))
 
         self._is_connected = False
-        # print("[SERVER.END CONEXION] Termino el cierre de la conexion")
+        print("[SERVER.END CONEXION] Termino el cierre de la conexion")
         # OJO, ver si aca o en otro lado tengo q cerrar threads q controlan el
         # timeout d paquetes
 
