@@ -105,7 +105,7 @@ Opciones:
 
 #### Ejemplo de uso
 ```bash
-python3 start_server.py -v -s /ruta/al/storage_server -r sw
+python3 start-server.py -v -s /ruta/al/storage_server -r sw
 ```
 
 En caso de no especificarse puerto o IP, se tomara por default: localhost:8080
