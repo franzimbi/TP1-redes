@@ -49,9 +49,7 @@ class ProtocolServer:
                 size = int(size_file / 1024)
             else:
                 size = int(size_file / 1024) + 1
-            print(f"enviando archivo {size}")
             for j in range(size):
-                print(f"recibiendo chunk {j}")
                 data = self.socket.recv(1024)
                 f.write(data)
         f.close()
@@ -97,10 +95,8 @@ class ProtocolServer:
                 size = int(size / 1024)
             else:
                 size = int(size / 1024) + 1
-            print(f"enviando archivo {size}")
 
             for j in range(size):
-                print(f"enviando chunk {j}")
                 chunk = f.read(1024)
                 self.socket.sendall(chunk)
         f.close()

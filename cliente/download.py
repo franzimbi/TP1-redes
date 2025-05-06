@@ -74,7 +74,7 @@ if args.protocol == "sr":
     skt = SocketRDT_SR(args.host, args.port, logger)
 
 elif args.protocol == "sw":
-    skt = SocketRDT_SW()
+    skt = SocketRDT_SW(logger)
 
 if args.protocol == "sr":
     recv_thread = threading.Thread(target=recv_loop, args=(skt,))

@@ -131,7 +131,7 @@ class SocketRDT_SR:
     def accept(self):
         while self.keep_running:
 
-            # self.reap_dead_connections()
+            self.reap_dead_connections()
 
             data_syn, addr_syn = (
                 self.SYN_queue.get()

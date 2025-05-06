@@ -78,7 +78,7 @@ if args.protocol == "sr":
     skt = SocketRDT_SR(args.host, args.port, logger)
 
 elif args.protocol == "sw":
-    skt = SocketRDT_SW()
+    skt = SocketRDT_SW(logger)
 else:
     skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
