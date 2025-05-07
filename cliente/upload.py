@@ -92,14 +92,26 @@ try:
     logger.log(f"Arrancando cliente en: ({args.host}:{args.port})", HIGH_VERBOSITY)
 
     protocol = ProtocolClient("U", skt, logger)
-
+    print("-1")
     protocol.send_start_message()
+    print("-2")
     protocol.send_file(args.source, args.name)
+    print("-3")
 except Exception:
+    print("el error fue: ", sys.exc_info()[0])
+    print("el error fue: ", sys.exc_info()[1])
+    logger.log(
+        f"Error al conectar al servidor {args.host}:{args.port}",
+        NORMAL_VERBOSITY,
+    )
     logger.log(f"Error al conectar", NORMAL_VERBOSITY)
 finally:
-
+    
+    end2 = time.time()
+    print(f"La función tardó {end2 - start:.4f} segundos")
+    print("Cerrando socket")
     skt.close()
+    print("socket cerrado")
 
     if args.protocol == "sr":
         skt.keep_running = False
