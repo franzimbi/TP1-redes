@@ -12,7 +12,7 @@ from common.logger import LOW_VERBOSITY, HIGH_VERBOSITY
 MAX_PACKAGE_SIZE = 1035
 HEADER_SIZE = 13  # confirmar esto
 TOTAL_RETRIES = 5
-WINDOW_SIZE = 5
+WINDOW_SIZE = 32000
 MAX_SEQ_NUM = 2**16 - 1
 
 # HAY Q HACER UN TIMEOUT SI NO RECIBE MAS MENSAJES DESP DE
@@ -43,7 +43,7 @@ class SocketRDT_SR:
         self.thrds = {}  # diccionario de thrds
         self.packages_acked = {}  # diccionario de acked
         self.stop_events = {}  # diccionario de stop events
-        self.shared_lenghts = {}  # diccionario de variables compartidas
+        self.shared_lengths = {}  # diccionario largos de paquetes
         # receptor
         self.recv_base = 0  # Primer número de secuencia esperada (receptor)
         self.recv_buffer = {}  # clave: número de secuencia, valor: datos
@@ -65,8 +65,12 @@ class SocketRDT_SR:
         self._alpha = 0.125
         self._beta = 0.25
         self.send_times = {}
+        self.in_flight = {}
+        self.lock = threading.Lock()
 
         self.process_pack_thread = None
+        self.wake_event = threading.Event()
+
 
     def __del__(self):
         self.keep_running = False
@@ -175,7 +179,7 @@ class SocketRDT_SR:
                 new_socket.thrds = {}
                 new_socket.packages_acked = {}
                 new_socket.stop_events = {}
-                new_socket.shared_lenghts = {}
+                new_socket.shared_lengths = {}
 
                 new_socket.recv_base = (
                     pack_syn.get_sequence_number() + 1
@@ -196,6 +200,8 @@ class SocketRDT_SR:
                 new_socket._alpha = 0.125
                 new_socket._beta = 0.25
                 new_socket.send_times = {}
+                new_socket.in_flight = {}
+                new_socket.lock = threading.Lock()
                 self.connections[addr_syn] = new_socket
 
                 # enviar SYN+ACK y esperar ACK final
@@ -254,6 +260,11 @@ class SocketRDT_SR:
         )
         self.process_pack_thread.daemon = True
         self.process_pack_thread.start()
+        self.acks_checker_thread = threading.Thread(
+            target=self.ack_and_retransmit_loop
+        )
+        self.acks_checker_thread.daemon = True  ###########################################3
+        self.acks_checker_thread.start()
         return True
 
     def sendall(self, data):
@@ -277,37 +288,97 @@ class SocketRDT_SR:
 
                 offset += len(data_chunk)
 
-                # revisar ACKs
-            try:
-                self._check_ACKs()
-
-            except TimeoutError:
-                pass
+            #     # revisar ACKs
+            # try:
+            #     self._check_ACKs()
+# 
+            # except TimeoutError:
+            #     pass
 
     def _send_data(self, data):
         pack = Package()
         pack.set_data(data)
         pack.set_sequence_number(self.next_seq_number)
         self.socket.sendto(pack.packaging(), self.adress)
+        # print(f"[SR_SENDER] Enviado paquete con seq {self.next_seq_number}")
+
 
         # FIX: Corrección de aumento de sequence number
         self.next_seq_number = (self.next_seq_number + len(data)) % MAX_SEQ_NUM
+        
+        # print(f"[SR_SENDER](ACK que espero recibir): {self.next_seq_number}")
+
+        with self.lock:
+            self.shared_lengths[self.next_seq_number] = pack.get_data_length()
+            self.in_flight[self.next_seq_number] = (pack, time.time())
+        self.wake_event.set()
 
         self.send_times[self.next_seq_number] = (
             time.time()
         )  # me guardo el time de envio
-        self._create_thrd(pack)  # crear hilo para controlar el timeout
 
+    def ack_and_retransmit_loop(self):
+        while self.keep_running:
+            now = time.time()
+            did_work = False
+
+            # Procesar ACKs
+            while True:
+                try:
+                    ack_pack = self.acks_queue.get_nowait()
+                    ack_num = ack_pack.get_ack_number()
+                    with self.lock:
+                        if ack_num in self.in_flight:
+                            sample_rtt = now - self.in_flight[ack_num][1]
+                            self._update_timeout(sample_rtt)
+                            del self.in_flight[ack_num]
+                            acked_seq = (ack_num - self.shared_lengths[ack_num]) % MAX_SEQ_NUM
+                            self.packages_acked[acked_seq] = self.shared_lengths[ack_num]
+                            del self.shared_lengths[ack_num]
+                    did_work = True
+                except queue.Empty:
+                    break
+
+            # Avanzar ventana
+            while self.send_base in self.packages_acked:
+                length = self.packages_acked[self.send_base]
+                del self.packages_acked[self.send_base]
+                self.send_base = (self.send_base + length) % MAX_SEQ_NUM
+                did_work = True
+
+            # Retransmisión si es necesario
+            now = time.time()
+            timeout_next = self._timeout  # Valor máximo posible
+            with self.lock:
+                items = list(self.in_flight.items())
+            for ack_num, (pack, ts) in items:
+                elapsed = now - ts
+                if elapsed > self._timeout:
+                    print("[retransmit] Timeout, retransmitiendo")
+                    self.socket.sendto(pack.packaging(), self.adress)
+                    self.in_flight[ack_num] = (pack, now)
+                    did_work = True
+                else:
+                    # Cuánto falta para el próximo timeout
+                    timeout_next = min(timeout_next, self._timeout - elapsed)
+
+            if not did_work:
+                # Espera solo hasta el próximo timeout
+                print ("no hice nada")
+                self.wake_event.wait(timeout=timeout_next)
+            self.wake_event.clear()
+
+            
     def _create_thrd(self, pack):
         
-        self.shared_lenghts[self.next_seq_number] = [0]
+        self.shared_lengths[self.next_seq_number] = [0]
         self.stop_events[self.next_seq_number] = threading.Event()
 
         thrd = threading.Thread(
             target=self._controlar_timeout,
             args=(
                 pack,
-                self.shared_lenghts[self.next_seq_number],
+                self.shared_lengths[self.next_seq_number],
                 self.stop_events[self.next_seq_number],
             ),
         )
@@ -327,7 +398,7 @@ class SocketRDT_SR:
             self.stop_events[pack_ack].set()
             self.thrds[pack_ack].join()
 
-            len_pack_thrd = self.shared_lenghts[pack_ack][0]
+            len_pack_thrd = self.shared_lengths[pack_ack][0]
             self._delete_thrd(pack_ack)
             numerito = (pack_ack - len_pack_thrd + MAX_SEQ_NUM) % MAX_SEQ_NUM
             self.packages_acked[numerito] = len_pack_thrd
@@ -342,7 +413,7 @@ class SocketRDT_SR:
     def _delete_thrd(self, pack_ack):
         del self.thrds[pack_ack]
         del self.stop_events[pack_ack]
-        del self.shared_lenghts[pack_ack]
+        del self.shared_lengths[pack_ack]
 
     def _controlar_timeout(self, pack, variable_compartida, stop_event):
         while not stop_event.is_set():
@@ -375,7 +446,9 @@ class SocketRDT_SR:
             return None
         pack = Package()
         pack.decode_to_package(recived_bytes)
-
+        # print(
+        #     f"[SR.RECV] Paquete recibido de {sender_adress} con seq {pack.get_sequence_number()} y ack {pack.get_ack_number()} y con ack flag {pack.want_ACK_FLAG()} y con syn flag {pack.want_SYN()} y con fin flag {pack.want_FIN()}"  # noqa: E501
+        # )
 
         if pack.want_ACK_FLAG():
 
@@ -383,6 +456,7 @@ class SocketRDT_SR:
                 self.connections[sender_adress].acks_queue.put(pack)
             else:
                 self.acks_queue.put(pack)
+                self.wake_event.set()
             return None
 
         if sender_adress in self.connections:
@@ -406,7 +480,7 @@ class SocketRDT_SR:
                 seq_num = pack.get_sequence_number()
                 data = pack.get_data()
             except queue.Empty:
-                continue  # volver a chequear self.keep_running
+                continue  # volver a chequear self.keep_keep_running
 
             # verificar si el paquete es FIN
             if pack.want_FIN():
@@ -434,6 +508,7 @@ class SocketRDT_SR:
                 # esto es thread safe, no hay problema que todos le hablen a la
                 # misma isntancia de socketUDP
                 self.socket.sendto(answer.packaging(), self.adress)
+                print(f"[SR.PROCESS_PACK] Enviado ACK {ack_seq}")
                 # procesar paquetes en orden (si estan disponibles)
                 while self.recv_base in self.recv_buffer:
                     # aca se puede procesar el paquete
@@ -448,9 +523,9 @@ class SocketRDT_SR:
                     # avanzar la ventana
                     # print("recv base antes: ", self.recv_base)
                     self.recv_base = (self.recv_base + len(data)) % MAX_SEQ_NUM
-                    # print(
-                    #     f"[SR.PROCESS_PACK] Avanzo la ventana a {self.recv_base}"  # noqa: E501
-                    # )
+                    print(
+                        f"[SR.PROCESS_PACK] Avanzo la ventana a {self.recv_base}"  # noqa: E501
+                    )
             # si me llego un seq_num menor, reenvio el ACK pq quizas el otro no
             # recibio mi ACK anterior
             else:
@@ -465,9 +540,9 @@ class SocketRDT_SR:
                 # esto es thread safe, no hay problema que todos le hablen a la
                 # misma isntancia de socketUDP
                 self.socket.sendto(answer.packaging(), self.adress)
-                # print(
-                #     f"[SR.PROCESS_PACK] Reenviando ACK para seq {ack_seq} (paquete duplicado con seq {seq_num})"  # noqa: E501
-                # )
+                print(
+                    f"[SR.PROCESS_PACK] Reenviando ACK para seq {ack_seq} (paquete duplicado con seq {seq_num})"  # noqa: E501
+                )
             # ignorar el paquete si esta afuera de la ventana
 
     @staticmethod

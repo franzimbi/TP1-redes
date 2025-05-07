@@ -96,6 +96,7 @@ try:
     protocol.send_start_message()
     protocol.send_file(args.source, args.name)
 except Exception:
+    print("el error es: ", sys.exc_info())
     logger.log(f"Error al conectar", NORMAL_VERBOSITY)
 finally:
 
