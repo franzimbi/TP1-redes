@@ -66,13 +66,13 @@ class ProtocolClient:
             print(f"enviando archivo {size}")
 
             for j in range(size):
-                print(f"enviando chunk {j}")
+                #print(f"enviando chunk {j}")
                 chunk = f.read(1024)
                 self.connection.sendall(chunk)
         # close the file
         f.close()
         self.logger.log(
-            f"[PROTOCOL_CLIENT] archivo entero mandado: {file_complete}",
+            f"[PROTOCOL_CLIENT] archivo entero enviado: {file_complete}",
             HIGH_VERBOSITY,
         )
 

@@ -12,7 +12,7 @@ from common.logger import LOW_VERBOSITY, HIGH_VERBOSITY
 MAX_PACKAGE_SIZE = 1035
 HEADER_SIZE = 13  # confirmar esto
 TOTAL_RETRIES = 5
-WINDOW_SIZE = 5
+WINDOW_SIZE = 23000
 MAX_SEQ_NUM = 2**16 - 1
 
 # HAY Q HACER UN TIMEOUT SI NO RECIBE MAS MENSAJES DESP DE
@@ -61,7 +61,7 @@ class SocketRDT_SR:
 
         self._estimated_rtt = None
         self._dev_rtt = 0
-        self._timeout = 0.05  # Valor inicial
+        self._timeout = 0.2  # Valor inicial
         self._alpha = 0.125
         self._beta = 0.25
         self.send_times = {}
@@ -288,19 +288,20 @@ class SocketRDT_SR:
         pack = Package()
         pack.set_data(data)
         pack.set_sequence_number(self.next_seq_number)
-        self.socket.sendto(pack.packaging(), self.adress)
 
         # FIX: Corrección de aumento de sequence number
         self.next_seq_number = (self.next_seq_number + len(data)) % MAX_SEQ_NUM
+        print(f"[SR_SENDER](ACK que espero recibir): {self.next_seq_number}")
 
         self.send_times[self.next_seq_number] = (
             time.time()
         )  # me guardo el time de envio
         self._create_thrd(pack)  # crear hilo para controlar el timeout
+        self.socket.sendto(pack.packaging(), self.adress)
 
     def _create_thrd(self, pack):
         
-        self.shared_lenghts[self.next_seq_number] = [0]
+        self.shared_lenghts[self.next_seq_number] = [pack.get_data_length()] 
         self.stop_events[self.next_seq_number] = threading.Event()
 
         thrd = threading.Thread(
@@ -317,27 +318,60 @@ class SocketRDT_SR:
         self.thrds[self.next_seq_number] = thrd
 
     def _check_ACKs(self):
-        pack = self.acks_queue.get()
+        try:
+            pack = self.acks_queue.get(timeout=0.01)  # Evita bloqueo
+        except queue.Empty:
+            return
+
         pack_ack = pack.get_ack_number()
         if pack_ack in self.thrds:
             sample_rtt = time.time() - self.send_times[pack_ack]
             self._update_timeout(sample_rtt)
-
-            # parar el hilo especifico
-            self.stop_events[pack_ack].set()
-            self.thrds[pack_ack].join()
-
+            self.stop_events[pack_ack].set()  # Pedimos que pare el hilo
             len_pack_thrd = self.shared_lenghts[pack_ack][0]
-            self._delete_thrd(pack_ack)
+            # Hilo separado para hacer join + limpieza
+            join_thread = threading.Thread(
+                target=self._join_and_delete_thrd,
+                args=(pack_ack,)
+            )
+            join_thread.start()
+
             numerito = (pack_ack - len_pack_thrd + MAX_SEQ_NUM) % MAX_SEQ_NUM
             self.packages_acked[numerito] = len_pack_thrd
 
+            print(f"[check_ACKs] send base es: {self.send_base}")
+            print(f"[check_ACKs] numerito es: {numerito}")
             while self.send_base in self.packages_acked:
-                lenght = self.packages_acked[self.send_base]
-
+                print ("entro al while")
+                length = self.packages_acked[self.send_base]
                 del self.packages_acked[self.send_base]
-                # FIX: Avanzar la base con modulo
-                self.send_base = (self.send_base + lenght) % MAX_SEQ_NUM
+                self.send_base = (self.send_base + length) % MAX_SEQ_NUM
+                print("nuevo send base es: ", self.send_base)
+
+    def _join_and_delete_thrd(self, pack_ack):
+        self.thrds[pack_ack].join()
+        self._delete_thrd(pack_ack)
+
+
+    def _delete_thrd(self, pack_ack):
+        del self.thrds[pack_ack]
+        del self.stop_events[pack_ack]
+        del self.shared_lenghts[pack_ack]
+
+    def _controlar_timeout(self, pack, variable_compartida, stop_event):
+        while not stop_event.is_set():
+
+            if stop_event.wait(self._estimated_rtt):
+                break
+
+            self._retransmit(pack)
+
+
+
+    def _retransmit(self, paquete):
+        # reenviar el paquete
+        print("[SR.RETRANSMIT] Retransmitiendo paquete con seq: ", paquete.get_sequence_number())
+        self.socket.sendto(paquete.packaging(), self.adress)
 
     def _delete_thrd(self, pack_ack):
         del self.thrds[pack_ack]
@@ -357,6 +391,7 @@ class SocketRDT_SR:
 
     def _retransmit(self, paquete):
         # reenviar el paquete
+        print("[SR.RETRANSMIT] Retransmitiendo paquete con seq: ", paquete.get_sequence_number())
         self.socket.sendto(paquete.packaging(), self.adress)
 
 
@@ -375,7 +410,10 @@ class SocketRDT_SR:
             return None
         pack = Package()
         pack.decode_to_package(recived_bytes)
-
+        
+        print(
+            f"[SR.RECV] Paquete recibido de {sender_adress} con seq {pack.get_sequence_number()} y ack {pack.get_ack_number()} y con ack flag {pack.want_ACK_FLAG()} y con syn flag {pack.want_SYN()} y con fin flag {pack.want_FIN()}"  # noqa: E501
+        )
 
         if pack.want_ACK_FLAG():
 
@@ -392,10 +430,10 @@ class SocketRDT_SR:
         if pack.want_SYN():
             self.logger.log("[sr-recv_all] Paquete SYN recibido", HIGH_VERBOSITY)
             self.SYN_queue.put((recived_bytes, sender_adress))
-        # else:
-        #     print(
-        #         f"[SR.RECV] Ignoro el paquete con seq_number {pack.get_sequence_number()} y con el flag de SYN {pack.want_SYN()}"   # noqa: E501
-        #     )
+        else:
+            print(
+                f"[SR.RECV] Ignoro el paquete con seq_number {pack.get_sequence_number()} y con el flag de SYN {pack.want_SYN()}"   # noqa: E501
+            )
         return None
 
     def process_package(self):
@@ -462,8 +500,6 @@ class SocketRDT_SR:
                 answer.set_ACK(ack_seq)
                 answer.set_ACK_FLAG()
                 answer.set_sequence_number(self.sequence_number % MAX_SEQ_NUM)
-                # esto es thread safe, no hay problema que todos le hablen a la
-                # misma isntancia de socketUDP
                 self.socket.sendto(answer.packaging(), self.adress)
                 # print(
                 #     f"[SR.PROCESS_PACK] Reenviando ACK para seq {ack_seq} (paquete duplicado con seq {seq_num})"  # noqa: E501

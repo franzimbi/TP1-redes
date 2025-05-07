@@ -93,7 +93,7 @@ class SocketRDT_SW:
                     client_ack_pack.decode_to_package(ack_data)
 
                     # Calcular sample_rtt y actualizar timeout_interval
-                    sample_rtt = self.timeout_interval  # O puedes medirlo con time.time()
+                    sample_rtt = self.timeout_interval
                     self._update_rtt(sample_rtt)
                     counter += 1
 
