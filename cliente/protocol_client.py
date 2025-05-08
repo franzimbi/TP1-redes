@@ -57,20 +57,11 @@ class ProtocolClient:
 
         # mando el archivo
         with open(file_complete, "rb") as f:
-            self.logger.log("[PROTOCOL_CLIENT] mando archivo", HIGH_VERBOSITY)
+            file_data = f.read()
 
-            if ((size / 1024) % 2) == 0:
-                size = int(size / 1024)
-            else:
-                size = int(size / 1024) + 1
-            print(f"enviando archivo {size}")
+        self.logger.log("[PROTOCOL_CLIENT] mando archivo completo", HIGH_VERBOSITY)
+        self.connection.sendall(file_data)  # tu protocolo se encarga de fragmentar
 
-            for j in range(size):
-                print(f"enviando chunk {j}")
-                chunk = f.read(1024)
-                self.connection.sendall(chunk)
-        # close the file
-        f.close()
         self.logger.log(
             f"[PROTOCOL_CLIENT] archivo entero mandado: {file_complete}",
             HIGH_VERBOSITY,

@@ -89,21 +89,16 @@ class ProtocolServer:
         )
 
         with open(file, "rb") as f:
-            self.logger.log("[server_protocol] mando archivo", HIGH_VERBOSITY)
+            file_data = f.read()
 
-            if ((size / 1024) % 2) == 0:
-                size = int(size / 1024)
-            else:
-                size = int(size / 1024) + 1
+        self.logger.log("[server_protocol] mando archivo completo", HIGH_VERBOSITY)
+        self.socket.sendall(file_data)  # tu protocolo se encarga de fragmentar
 
-            for j in range(size):
-                chunk = f.read(1024)
-                self.socket.sendall(chunk)
-        f.close()
         self.logger.log(
             f"[server_protocol]: archivo {file} enviado correctamente",
             NORMAL_VERBOSITY,
         )
+    
 
     def close(self):
         if not self.socket.is_closed():

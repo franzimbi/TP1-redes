@@ -66,7 +66,9 @@ def recv_loop(socket_principal):
 def handle_client(conn, addr, args, logger):
     proto = ProtocolServer(conn, logger)
     try:
+        print(f"[{addr}] antes de proto recv")
         option = proto.recv_option()
+        print(f"[{addr}] despues de proto recv")
         if option == "U":
             logger.log(f"[{addr}] Opcion Upload detectada", HIGH_VERBOSITY)
             proto.recv_file(args.storage)
