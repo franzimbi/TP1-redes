@@ -58,7 +58,7 @@ Opciones:
 
 #### Ejemplo de uso
 ```bash
-python3 upload.py -v -s /ruta/al/storage_client. -n montana.jpg -r sr
+python3 upload -v -s /ruta/al/storage_client. -n montana.jpg -r sr
 ```
 
 ### Download
@@ -80,7 +80,7 @@ python download [ - h ] [ - v | -q ] [ - H ADDR ] [ - p PORT ] [ - d FILEPATH ] 
 
 #### Ejemplo de uso
 ```bash
-python3 download.py -v -d /ruta/al/storage_client -n montana.jpg -r sr
+python3 download -v -d /ruta/al/storage_client -n montana.jpg -r sr
 ```
 
 
@@ -105,7 +105,7 @@ Opciones:
 
 #### Ejemplo de uso
 ```bash
-python3 start-server.py -v -s /ruta/al/storage_server -r sw
+python3 start-server -v -s /ruta/al/storage_server -r sw
 ```
 
 En caso de no especificarse puerto o IP, se tomara por default: localhost:8080
