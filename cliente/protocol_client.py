@@ -30,7 +30,7 @@ class ProtocolClient:
                 HIGH_VERBOSITY,
             )
         self.connection.sendall(self.type.encode())
-
+        
     def send_file(self, path, file):
         # mando name
         self.connection.sendall(len(file).to_bytes(32, byteorder="big"))

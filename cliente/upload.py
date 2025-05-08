@@ -92,11 +92,9 @@ try:
     logger.log(f"Arrancando cliente en: ({args.host}:{args.port})", HIGH_VERBOSITY)
 
     protocol = ProtocolClient("U", skt, logger)
-    print("-1")
     protocol.send_start_message()
-    print("-2")
     protocol.send_file(args.source, args.name)
-    print("-3")
+    
 except Exception:
     print("el error fue: ", sys.exc_info()[0])
     print("el error fue: ", sys.exc_info()[1])
